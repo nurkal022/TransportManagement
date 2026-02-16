@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Типы груза - Система управления транспортом{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>Типы груза</h2>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCargoTypeModal">
+                <i class="fas fa-plus"></i> Добавить тип груза
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Поле поиска -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" class="form-control" id="searchInput" placeholder="Поиск типов груза...">
+        </div>
+    </div>
+</div>
+
+<!-- Cargo Types Grid -->
+<div class="row" id="cargoTypesGrid">
+    {% for cargo_type in cargo_types %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ cargo_type.name }}</h5>
+                <p class="card-text">{{ cargo_type.description }}</p>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-primary" onclick="editCargoType({{ cargo_type.id }})">
+                        <i class="fas fa-edit"></i> Редактировать
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCargoType({{ cargo_type.id }})">
+                        <i class="fas fa-trash"></i> Удалить
+                    </button>
+                </div>
+            </div>
+            <div class="card-footer text-muted">
+                <small>Создано: {{ cargo_type.created_at.strftime('%Y-%m-%d') }}</small>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Модальное окно добавления типа груза -->
+<div class="modal fade" id="addCargoTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить новый тип груза</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('cargo_types_add') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Описание</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить тип груза</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования типа груза -->
+<div class="modal fade" id="editCargoTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать тип груза</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editCargoTypeForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="editId" name="id">
+                    <div class="mb-3">
+                        <label for="editName" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="editName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editDescription" class="form-label">Описание</label>
+                        <textarea class="form-control" id="editDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Search functionality
+document.getElementById('searchInput').addEventListener('keyup', function(e) {
+    const searchText = e.target.value.toLowerCase();
+    const cards = document.querySelectorAll('#cargoTypesGrid .col-md-4');
+    
+    cards.forEach(card => {
+        const title = card.querySelector('.card-title').textContent.toLowerCase();
+        const description = card.querySelector('.card-text').textContent.toLowerCase();
+        
+        if (title.includes(searchText) || description.includes(searchText)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+});
+
+// Edit cargo type
+function editCargoType(id) {
+    fetch(`/api/cargo_types/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editId').value = data.id;
+            document.getElementById('editName').value = data.name;
+            document.getElementById('editDescription').value = data.description;
+            
+            const modal = new bootstrap.Modal(document.getElementById('editCargoTypeModal'));
+            modal.show();
+        });
+}
+
+// Delete cargo type
+function deleteCargoType(id) {
+    if (confirm('Вы уверены, что хотите удалить этот тип груза?')) {
+        fetch(`/api/cargo_types/${id}`, {
+            method: 'DELETE'
+        }).then(response => {
+            if (response.ok) {
+                window.location.reload();
+            }
+        });
+    }
+}
+
+// Handle edit form submission
+document.getElementById('editCargoTypeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('editId').value;
+    
+    fetch(`/api/cargo_types/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: document.getElementById('editName').value,
+            description: document.getElementById('editDescription').value
+        })
+    }).then(response => {
+        if (response.ok) {
+            window.location.reload();
+        }
+    });
+});
+</script>
+{% endblock %} 

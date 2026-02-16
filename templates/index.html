@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - Система Управления Транспортом{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2 class="mb-4">Панель управления</h2>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stats-card primary border-primary">
+            <div class="card-body text-center">
+                <i class="fas fa-route fa-2x text-primary mb-2"></i>
+                <h5 class="card-title">Всего маршрутов</h5>
+                <h2 class="mb-0">{{ total_routes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card success border-success">
+            <div class="card-body text-center">
+                <i class="fas fa-truck fa-2x text-success mb-2"></i>
+                <h5 class="card-title">Активный транспорт</h5>
+                <h2 class="mb-0">{{ active_vehicles }}</h2>
+                <small class="text-muted">из {{ total_vehicles }} всего</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card info border-info">
+            <div class="card-body text-center">
+                <i class="fas fa-id-card fa-2x text-info mb-2"></i>
+                <h5 class="card-title">Всего водителей</h5>
+                <h2 class="mb-0">{{ total_drivers }}</h2>
+                <small class="text-muted">{{ available_drivers_count }} свободны</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card warning border-warning">
+            <div class="card-body text-center">
+                <i class="fas fa-file-invoice fa-2x text-warning mb-2"></i>
+                <h5 class="card-title">Оплаченные счета</h5>
+                <h2 class="mb-0">{{ paid_invoices }}</h2>
+                <small class="text-muted">из {{ total_routes }} маршрутов</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Stats Row -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-secondary">
+            <div class="card-body text-center">
+                <i class="fas fa-tools fa-2x text-secondary mb-2"></i>
+                <h5 class="card-title">В ремонте</h5>
+                <h2 class="mb-0">{{ repair_vehicles }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                <h5 class="card-title">Неактивный</h5>
+                <h2 class="mb-0">{{ inactive_vehicles }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <i class="fas fa-boxes fa-2x text-primary mb-2"></i>
+                <h5 class="card-title">Типов груза</h5>
+                <h2 class="mb-0">{{ total_cargo_types }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-plus fa-2x text-info mb-2"></i>
+                <h5 class="card-title">За 30 дней</h5>
+                <h2 class="mb-0">{{ recent_routes_count }}</h2>
+                <small class="text-muted">новых маршрутов</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Activity -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt"></i> Помесячная активность</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="monthSelector" class="form-label">Выберите месяц:</label>
+                        <input type="month" class="form-control" id="monthSelector" value="">
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                        <button class="btn btn-primary me-2" onclick="loadMonthlyStats()">
+                            <i class="fas fa-search"></i> Показать статистику
+                        </button>
+                        <div id="monthlyStatsInfo" class="text-muted">
+                            Выберите месяц для просмотра детальной статистики
+                        </div>
+                    </div>
+                </div>
+
+                <div id="monthlyStats" class="row" style="display: none;">
+                    <div class="col-md-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <i class="fas fa-route fa-lg text-primary mb-2"></i>
+                                <h6>Маршрутов</h6>
+                                <h4 id="monthRoutes" class="text-primary">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <i class="fas fa-weight fa-lg text-success mb-2"></i>
+                                <h6>Вес груза (т)</h6>
+                                <h4 id="monthWeight" class="text-success">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <i class="fas fa-gas-pump fa-lg text-info mb-2"></i>
+                                <h6>Расход топлива (л)</h6>
+                                <h4 id="monthFuel" class="text-info">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <i class="fas fa-file-invoice fa-lg text-warning mb-2"></i>
+                                <h6>Оплаченные счета</h6>
+                                <h4 id="monthPaid" class="text-warning">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Быстрые действия</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addRouteModal">
+                            <i class="fas fa-plus"></i> Новый маршрут
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addDriverModal">
+                            <i class="fas fa-user-plus"></i> Добавить водителя
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-warning w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                            <i class="fas fa-truck-loading"></i> Добавить транспорт
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-info w-100 mb-2" data-bs-toggle="modal" data-bs-target="#addCargoTypeModal">
+                            <i class="fas fa-box-open"></i> Новый тип груза
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Routes -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Последние маршруты</h5>
+                <a href="{{ url_for('routes') }}" class="btn btn-sm btn-primary">Показать все</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Название маршрута</th>
+                                <th>Водитель</th>
+                                <th>Транспорт</th>
+                                <th>Статус</th>
+                                <th>Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for route in recent_routes_list %}
+                            <tr>
+                                <td>{{ route.name }}</td>
+                                <td>{{ route.driver.name if route.driver else 'Не назначен' }}</td>
+                                <td>{{ route.vehicle.number if route.vehicle else 'Не назначен' }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ route.status }}">
+                                        {% if route.status == 'planned' %}
+                                            Запланирован
+                                        {% elif route.status == 'in_progress' %}
+                                            В пути
+                                        {% elif route.status == 'completed' %}
+                                            Завершен
+                                        {% elif route.status == 'cancelled' %}
+                                            Отменен
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>{{ route.date.strftime('%d.%m.%Y') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vehicle Status -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Статус транспорта</h5>
+                <a href="{{ url_for('vehicles') }}" class="btn btn-sm btn-primary">Показать все</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Транспорт</th>
+                                <th>Статус</th>
+                                <th>Водитель</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vehicle in vehicles %}
+                            <tr>
+                                <td>{{ vehicle.number }} - {{ vehicle.model }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ vehicle.status }}">
+                                        {% if vehicle.status == 'active' %}
+                                            Активен
+                                        {% elif vehicle.status == 'repair' %}
+                                            В ремонте
+                                        {% elif vehicle.status == 'inactive' %}
+                                            Неактивен
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>{{ vehicle.driver.name if vehicle.driver else 'Не назначен' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Active Drivers -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Активные водители</h5>
+                <a href="{{ url_for('drivers') }}" class="btn btn-sm btn-primary">Показать все</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Водитель</th>
+                                <th>Контакт</th>
+                                <th>Текущий маршрут</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for driver in active_drivers_list %}
+                            <tr>
+                                <td>{{ driver.name }}</td>
+                                <td>{{ driver.contact }}</td>
+                                <td>{{ driver.current_route.name if driver.current_route else 'Нет активного маршрута' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include Modals -->
+{% include 'modals/route_modal.html' %}
+{% include 'modals/driver_modal.html' %}
+{% include 'modals/vehicle_modal.html' %}
+{% include 'modals/cargo_type_modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load monthly statistics
+function loadMonthlyStats() {
+    const monthInput = document.getElementById('monthSelector');
+    const month = monthInput.value;
+
+    if (!month) {
+        alert('Пожалуйста, выберите месяц');
+        return;
+    }
+
+    const statsInfo = document.getElementById('monthlyStatsInfo');
+    const statsDiv = document.getElementById('monthlyStats');
+
+    statsInfo.textContent = 'Загрузка...';
+
+    fetch(`/api/monthly-stats?month=${month}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('monthRoutes').textContent = data.routes_count;
+            document.getElementById('monthWeight').textContent = data.total_weight.toFixed(1);
+            document.getElementById('monthFuel').textContent = data.total_fuel.toFixed(1);
+            document.getElementById('monthPaid').textContent = data.paid_invoices;
+
+            statsDiv.style.display = 'flex';
+            statsInfo.textContent = `Статистика за ${month}`;
+        })
+        .catch(error => {
+            console.error('Error loading monthly stats:', error);
+            statsInfo.textContent = 'Ошибка загрузки данных';
+        });
+}
+
+// Initialize month selector with current month
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    document.getElementById('monthSelector').value = `${year}-${month}`;
+});
+</script>
+{% endblock %} 

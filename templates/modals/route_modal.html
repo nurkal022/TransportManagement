@@ -1,0 +1,350 @@
+<!-- Add Route Modal -->
+<div class="modal fade" id="addRouteModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-route"></i> Добавить новый маршрут
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('routes_add') }}" method="POST" id="addRouteForm">
+                <div class="modal-body">
+                    <!-- Progress Steps -->
+                    <div class="mb-4">
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: 25%;" id="formProgress">Шаг 1 из 4</div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Основная информация -->
+                    <div class="form-step" id="step1">
+                        <h6 class="mb-3">Шаг 1: Основная информация о маршруте</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Название маршрута</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="start_point" class="form-label">Пункт отправления</label>
+                                    <input type="text" class="form-control" id="start_point" name="start_point" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="end_point" class="form-label">Пункт назначения</label>
+                                    <input type="text" class="form-control" id="end_point" name="end_point" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="date" class="form-label">Дата отправления</label>
+                                    <input type="date" class="form-control" id="date" name="date" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="distance" class="form-label">Расстояние (км)</label>
+                                    <input type="number" step="0.1" class="form-control" id="distance" name="distance" required>
+                                    <div class="form-text">Расстояние используется для расчета времени прибытия</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="priority" class="form-label">Приоритет</label>
+                                    <select class="form-select" id="priority" name="priority" required>
+                                        <option value="low">Низкий</option>
+                                        <option value="normal" selected>Обычный</option>
+                                        <option value="high">Высокий</option>
+                                        <option value="urgent">Срочный</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Информация о грузе -->
+                    <div class="form-step d-none" id="step2">
+                        <h6 class="mb-3">Шаг 2: Информация о грузе</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="cargo_type" class="form-label">Тип груза</label>
+                                    <select class="form-select" id="cargo_type" name="cargo_type_id" required>
+                                        <option value="">Выберите тип груза</option>
+                                        {% for cargo_type in cargo_types %}
+                                        <option value="{{ cargo_type.id }}">{{ cargo_type.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="cargo_weight" class="form-label">Вес груза (т)</label>
+                                    <input type="number" step="0.01" class="form-control" id="cargo_weight" name="cargo_weight" required>
+                                    <input type="hidden" id="weight_unit" name="weight_unit" value="t">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="cargo_volume" class="form-label">Объем груза (м³)</label>
+                                    <input type="number" step="0.01" class="form-control" id="cargo_volume" name="cargo_volume" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="fuel" class="form-label">Топливо (л)</label>
+                                    <input type="number" step="0.01" class="form-control" id="fuel" name="fuel">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-info">
+                                    <h6>Рекомендации по перевозке:</h6>
+                                    <div id="cargoRecommendations">
+                                        Выберите тип груза для получения рекомендаций
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Транспорт и водитель -->
+                    <div class="form-step d-none" id="step3">
+                        <h6 class="mb-3">Шаг 3: Назначение транспорта и водителя</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="vehicle" class="form-label">Транспорт</label>
+                                    <select class="form-select" id="vehicle" name="vehicle_id">
+                                        <option value="">Выберите транспорт</option>
+                                        {% for vehicle in vehicles %}
+                                        <option value="{{ vehicle.id }}" data-capacity="30" data-volume="120">
+                                            {{ vehicle.number }} - {{ vehicle.model }} ({{ vehicle.year }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="driver" class="form-label">Водитель</label>
+                                    <select class="form-select" id="driver" name="driver_id">
+                                        <option value="">Выберите водителя</option>
+                                        {% for driver in drivers %}
+                                        <option value="{{ driver.id }}" data-vehicle="{{ driver.vehicle_id }}">
+                                            {{ driver.name }} {% if driver.current_route %}(В пути){% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-info">
+                                    <h6>Информация о транспорте:</h6>
+                                    <div id="vehicleInfo">
+                                        Выберите транспорт для просмотра информации
+                                    </div>
+                                </div>
+                                <div class="alert alert-info mt-3">
+                                    <h6>Информация о водителе:</h6>
+                                    <div id="driverInfo">
+                                        Выберите водителя для просмотра информации
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Дополнительная информация -->
+                    <div class="form-step d-none" id="step4">
+                        <h6 class="mb-3">Шаг 4: Дополнительная информация</h6>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="notes" class="form-label">Примечания</label>
+                                    <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input" type="checkbox" id="invoice_paid" name="invoice_paid">
+                                    <label class="form-check-label" for="invoice_paid">Статус счета (оплачен)</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-info">
+                            <h6>Итоговая информация:</h6>
+                            <div id="routeSummary">
+                                Заполните все поля для просмотра итоговой информации
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="prevStep" style="display: none;">
+                        <i class="fas fa-arrow-left"></i> Назад
+                    </button>
+                    <button type="button" class="btn btn-primary" id="nextStep">
+                        Далее <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button type="submit" class="btn btn-success" id="submitRoute" style="display: none;">
+                        <i class="fas fa-save"></i> Создать маршрут
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add this to your scripts section -->
+<script>
+let currentStep = 1;
+const totalSteps = 4;
+
+function updateFormProgress() {
+    const progress = (currentStep / totalSteps) * 100;
+    document.getElementById('formProgress').style.width = `${progress}%`;
+    document.getElementById('formProgress').textContent = `Шаг ${currentStep} из ${totalSteps}`;
+}
+
+function showStep(step) {
+    document.querySelectorAll('.form-step').forEach(el => el.classList.add('d-none'));
+    document.getElementById(`step${step}`).classList.remove('d-none');
+    
+    // Update buttons
+    const prevBtn = document.getElementById('prevStep');
+    const nextBtn = document.getElementById('nextStep');
+    const submitBtn = document.getElementById('submitRoute');
+    
+    prevBtn.style.display = step > 1 ? 'block' : 'none';
+    nextBtn.style.display = step < totalSteps ? 'block' : 'none';
+    submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+    
+    updateFormProgress();
+}
+
+document.getElementById('nextStep').addEventListener('click', () => {
+    if (validateStep(currentStep)) {
+        currentStep++;
+        showStep(currentStep);
+        updateSummary();
+    }
+});
+
+document.getElementById('prevStep').addEventListener('click', () => {
+    currentStep--;
+    showStep(currentStep);
+});
+
+function validateStep(step) {
+    let isValid = true;
+    const currentStepElement = document.getElementById(`step${step}`);
+    
+    // Проверяем все обязательные поля текущего шага
+    currentStepElement.querySelectorAll('[required]').forEach(field => {
+        if (!field.value) {
+            isValid = false;
+            field.classList.add('is-invalid');
+        } else {
+            field.classList.remove('is-invalid');
+        }
+    });
+    
+    if (!isValid) {
+        alert('Пожалуйста, заполните все обязательные поля');
+    }
+    
+    return isValid;
+}
+
+// Обновление рекомендаций при выборе типа груза
+document.getElementById('cargo_type').addEventListener('change', function() {
+    const cargoType = this.options[this.selectedIndex].text;
+    let recommendations = '';
+    
+    switch(cargoType) {
+        case 'Продукты питания':
+            recommendations = `
+                <ul>
+                    <li>Требуется рефрижератор</li>
+                    <li>Контроль температуры</li>
+                    <li>Соблюдение санитарных норм</li>
+                </ul>`;
+            break;
+        case 'Строительные материалы':
+            recommendations = `
+                <ul>
+                    <li>Проверка грузоподъемности</li>
+                    <li>Надежное крепление</li>
+                    <li>Защита от осадков</li>
+                </ul>`;
+            break;
+        // Добавьте другие типы грузов
+    }
+    
+    document.getElementById('cargoRecommendations').innerHTML = recommendations;
+});
+
+// Обновление информации о транспорте
+document.getElementById('vehicle').addEventListener('change', function() {
+    const vehicle = this.options[this.selectedIndex];
+    if (vehicle.value) {
+        const info = `
+            <ul>
+                <li>Номер: ${vehicle.text.split(' - ')[0]}</li>
+                <li>Модель: ${vehicle.text.split(' - ')[1]}</li>
+                <li>Грузоподъемность: ${vehicle.dataset.capacity} тонн</li>
+                <li>Объем кузова: ${vehicle.dataset.volume} м³</li>
+            </ul>`;
+        document.getElementById('vehicleInfo').innerHTML = info;
+    }
+});
+
+// Обновление информации о водителе
+document.getElementById('driver').addEventListener('change', function() {
+    const driver = this.options[this.selectedIndex];
+    if (driver.value) {
+        const info = `
+            <ul>
+                <li>ФИО: ${driver.text}</li>
+                <li>Статус: ${driver.text.includes('(В пути)') ? 'В рейсе' : 'Свободен'}</li>
+            </ul>`;
+        document.getElementById('driverInfo').innerHTML = info;
+    }
+});
+
+// Обновление итоговой информации
+function updateSummary() {
+    if (currentStep === totalSteps) {
+        const summary = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Маршрут:</h6>
+                    <p>${document.getElementById('name').value}</p>
+                    <p>От: ${document.getElementById('start_point').value}</p>
+                    <p>До: ${document.getElementById('end_point').value}</p>
+                    <p>Расстояние: ${document.getElementById('distance').value} км</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Груз:</h6>
+                    <p>Тип: ${document.getElementById('cargo_type').options[document.getElementById('cargo_type').selectedIndex].text}</p>
+                    <p>Вес: ${document.getElementById('cargo_weight').value} ${document.getElementById('weight_unit').value}</p>
+                    <p>Объем: ${document.getElementById('cargo_volume').value} м³</p>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h6>Транспорт и водитель:</h6>
+                    <p>Транспорт: ${document.getElementById('vehicle').options[document.getElementById('vehicle').selectedIndex].text}</p>
+                    <p>Водитель: ${document.getElementById('driver').options[document.getElementById('driver').selectedIndex].text}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Дополнительно:</h6>
+                    <p>Приоритет: ${document.getElementById('priority').options[document.getElementById('priority').selectedIndex].text}</p>
+                    <p>Примечания: ${document.getElementById('notes').value || 'Нет'}</p>
+                    <p>Статус счета: ${document.getElementById('invoice_paid').checked ? 'Да' : 'Нет'}</p>
+                </div>
+            </div>`;
+        document.getElementById('routeSummary').innerHTML = summary;
+    }
+}
+
+// Валидация формы перед отправкой
+document.getElementById('addRouteForm').addEventListener('submit', function(e) {
+    if (!validateStep(currentStep)) {
+        e.preventDefault();
+    }
+});
+
+// Инициализация
+showStep(1);
+</script> 

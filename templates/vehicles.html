@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Транспорт - Система управления транспортом{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>Транспорт</h2>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+                <i class="fas fa-plus"></i> Добавить транспорт
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Поиск и фильтры -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" class="form-control" id="searchInput" placeholder="Поиск транспорта...">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <select class="form-select" id="statusFilter">
+            <option value="">Все статусы</option>
+            <option value="active">Активный</option>
+            <option value="repair">В ремонте</option>
+            <option value="inactive">Неактивный</option>
+        </select>
+    </div>
+</div>
+
+<!-- Vehicles List -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Номер</th>
+                                <th>Модель</th>
+                                <th>Год</th>
+                                <th>Статус</th>
+                                <th>Текущий водитель</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vehiclesTableBody">
+                            {% for vehicle in vehicles %}
+                            <tr>
+                                <td>{{ vehicle.number }}</td>
+                                <td>{{ vehicle.model }}</td>
+                                <td>{{ vehicle.year }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ vehicle.status }}">
+                                        {{ vehicle.status|title }}
+                                    </span>
+                                </td>
+                                <td>{{ vehicle.driver.name if vehicle.driver else 'Не назначен' }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-info" onclick="viewActivities({{ vehicle.id }})" title="Активности">
+                                            <i class="fas fa-tools"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" onclick="editVehicle({{ vehicle.id }})" title="Редактировать">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteVehicle({{ vehicle.id }})" title="Удалить">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления транспорта -->
+<div class="modal fade" id="addVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить новый транспорт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('vehicles_add') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="number" class="form-label">Номер транспорта</label>
+                        <input type="text" class="form-control" id="number" name="number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="model" class="form-label">Модель</label>
+                        <input type="text" class="form-control" id="model" name="model" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="year" class="form-label">Год</label>
+                        <input type="number" class="form-control" id="year" name="year" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Статус</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="active">Активный</option>
+                            <option value="repair">В ремонте</option>
+                            <option value="inactive">Неактивный</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить транспорт</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования транспорта -->
+<div class="modal fade" id="editVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Редактировать транспорт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editVehicleForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="editId" name="id">
+                    <div class="mb-3">
+                        <label for="editNumber" class="form-label">Номер транспорта</label>
+                        <input type="text" class="form-control" id="editNumber" name="number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editModel" class="form-label">Модель</label>
+                        <input type="text" class="form-control" id="editModel" name="model" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editYear" class="form-label">Год</label>
+                        <input type="number" class="form-control" id="editYear" name="year" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editStatus" class="form-label">Статус</label>
+                        <select class="form-select" id="editStatus" name="status" required>
+                            <option value="active">Активный</option>
+                            <option value="repair">В ремонте</option>
+                            <option value="inactive">Неактивный</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Search and filter functionality
+function filterVehicles() {
+    const searchText = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const rows = document.querySelectorAll('#vehiclesTableBody tr');
+    
+    rows.forEach(row => {
+        const number = row.cells[0].textContent.toLowerCase();
+        const model = row.cells[1].textContent.toLowerCase();
+        const status = row.cells[3].textContent.trim().toLowerCase();
+        
+        const matchesSearch = number.includes(searchText) || model.includes(searchText);
+        const matchesStatus = !statusFilter || status === statusFilter;
+        
+        row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+    });
+}
+
+document.getElementById('searchInput').addEventListener('keyup', filterVehicles);
+document.getElementById('statusFilter').addEventListener('change', filterVehicles);
+
+// Edit vehicle
+function editVehicle(id) {
+    fetch(`/api/vehicles/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editId').value = data.id;
+            document.getElementById('editNumber').value = data.number;
+            document.getElementById('editModel').value = data.model;
+            document.getElementById('editYear').value = data.year;
+            document.getElementById('editStatus').value = data.status;
+            
+            const modal = new bootstrap.Modal(document.getElementById('editVehicleModal'));
+            modal.show();
+        });
+}
+
+// Delete vehicle
+function deleteVehicle(id) {
+    if (confirm('Вы уверены, что хотите удалить этот транспорт?')) {
+        fetch(`/api/vehicles/${id}`, {
+            method: 'DELETE'
+        }).then(response => {
+            if (response.ok) {
+                window.location.reload();
+            }
+        });
+    }
+}
+
+// View vehicle activities
+function viewActivities(vehicleId) {
+    window.location.href = `/vehicles/${vehicleId}/activities`;
+}
+
+// Handle edit form submission
+document.getElementById('editVehicleForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('editId').value;
+    
+    fetch(`/api/vehicles/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            number: document.getElementById('editNumber').value,
+            model: document.getElementById('editModel').value,
+            year: document.getElementById('editYear').value,
+            status: document.getElementById('editStatus').value
+        })
+    }).then(response => {
+        if (response.ok) {
+            window.location.reload();
+        }
+    });
+});
+</script>
+{% endblock %} 

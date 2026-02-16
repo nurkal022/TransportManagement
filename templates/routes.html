@@ -1,0 +1,1096 @@
+{% extends "base.html" %}
+
+{% block title %}Маршруты - Система Управления Транспортом{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Quick Route Creation Form -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-route"></i> Добавление маршрута</h5>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('routes_add') }}" method="POST" id="routeForm" class="row g-3">
+                <!-- Основная информация -->
+                <div class="col-md-3">
+                    <label for="name" class="form-label">Название маршрута</label>
+                    <input type="text" class="form-control" id="name" name="name" required list="routeNames">
+                    <datalist id="routeNames">
+                        {% for route in routes %}
+                        <option value="{{ route.name }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-3">
+                    <label for="start_point" class="form-label">Откуда</label>
+                    <input type="text" class="form-control" id="start_point" name="start_point" required list="cities">
+                    <datalist id="cities">
+                        {% for route in routes %}
+                        <option value="{{ route.start_point }}">
+                        <option value="{{ route.end_point }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_point" class="form-label">Куда</label>
+                    <input type="text" class="form-control" id="end_point" name="end_point" required list="cities">
+                </div>
+                <div class="col-md-3">
+                    <label for="date" class="form-label">Дата отправления</label>
+                    <input type="date" class="form-control" id="date" name="date" required>
+                </div>
+
+                <!-- Груз и транспорт -->
+                <div class="col-md-2">
+                    <label for="cargo_type" class="form-label">Тип груза</label>
+                    <select class="form-select" id="cargo_type" name="cargo_type_id" required>
+                        <option value="">Выберите тип</option>
+                        {% for cargo_type in cargo_types %}
+                        <option value="{{ cargo_type.id }}">{{ cargo_type.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="cargo_weight" class="form-label">Вес (т)</label>
+                    <input type="number" class="form-control" id="cargo_weight" name="cargo_weight" required>
+                    <input type="hidden" id="weight_unit" name="weight_unit" value="t">
+                </div>
+                <div class="col-md-2">
+                    <label for="cargo_volume" class="form-label">Объем (м³)</label>
+                    <input type="number" class="form-control" id="cargo_volume" name="cargo_volume" required>
+                </div>
+                <div class="col-md-2">
+                    <label for="fuel" class="form-label">Топливо (л)</label>
+                    <input type="number" step="0.01" class="form-control" id="fuel" name="fuel">
+                </div>
+                <div class="col-md-3">
+                    <label for="vehicle" class="form-label">Транспорт</label>
+                    <select class="form-select" id="vehicle" name="vehicle_id" required>
+                        <option value="">Выберите транспорт</option>
+                        {% for vehicle in vehicles %}
+                        {% if vehicle.status == 'active' %}
+                        <option value="{{ vehicle.id }}">{{ vehicle.number }} - {{ vehicle.model }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="driver" class="form-label">Водитель</label>
+                    <select class="form-select" id="driver" name="driver_id" required>
+                        <option value="">Выберите водителя</option>
+                        {% for driver in drivers %}
+                        <option value="{{ driver.id }}" data-vehicle-id="{{ driver.vehicle_id }}">
+                            {{ driver.name }}
+                            {% if driver.vehicle %}
+                            ({{ driver.vehicle.number }})
+                            {% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Дополнительная информация -->
+                <div class="col-md-3">
+                    <label for="trips_count" class="form-label">Количество рейсов</label>
+                    <input type="number" min="1" class="form-control" id="trips_count" name="trips_count" value="1" required>
+                </div>
+                <div class="col-md-9">
+                    <label for="notes" class="form-label">Примечания</label>
+                    <input type="text" class="form-control" id="notes" name="notes">
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" id="invoice_paid" name="invoice_paid">
+                        <label class="form-check-label" for="invoice_paid">Статус счета (оплачен)</label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Создать маршрут
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="clearForm">
+                        <i class="fas fa-eraser"></i> Очистить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Existing Routes Table -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Список маршрутов</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2>Управление маршрутами</h2>
+                        <div class="d-flex gap-2">
+                            <div class="search-box me-2">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                    <input type="text" class="form-control" id="routeSearch" 
+                                           placeholder="Поиск по названию, городам, водителю, транспорту...">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Поиск работает по всем полям: названию, городам, водителю, транспорту и др.
+                                </small>
+                            </div>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRouteModal">
+                                <i class="fas fa-plus"></i> Новый маршрут
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="exportRoutes('excel')">
+                                <i class="fas fa-file-excel"></i> Экспорт Excel
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="exportRoutes('pdf')">
+                                <i class="fas fa-file-pdf"></i> Экспорт PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Filters -->
+            <div class="mb-4">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-outline-primary filter-btn" data-filter="today">
+                        <i class="fas fa-calendar-day"></i> Сегодня
+                    </button>
+                    <button class="btn btn-outline-primary filter-btn" data-filter="tomorrow">
+                        <i class="fas fa-calendar-plus"></i> Завтра
+                    </button>
+                    <button class="btn btn-outline-primary filter-btn" data-filter="week">
+                        <i class="fas fa-calendar-week"></i> Эта неделя
+                    </button>
+                    <button class="btn btn-outline-primary filter-btn" data-filter="month">
+                        <i class="fas fa-calendar-alt"></i> Этот месяц
+                    </button>
+                    <button class="btn btn-outline-secondary" id="resetFilters">
+                        <i class="fas fa-undo"></i> Сбросить все фильтры
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Filters -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-filter"></i> Расширенные фильтры</h5>
+                    <button class="btn btn-sm btn-light" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="collapse show" id="filterCollapse">
+                    <div class="card-body">
+                        <form id="filterForm" class="row g-3">
+                            <!-- Города отправления и назначения -->
+                            <div class="col-md-3">
+                                <label for="start_point_filter" class="form-label">Точка отправления</label>
+                                <input type="text" class="form-control" id="start_point_filter" name="start_point" placeholder="Любой город" list="cities" value="{{ current_filters.start_point or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="end_point_filter" class="form-label">Точка назначения</label>
+                                <input type="text" class="form-control" id="end_point_filter" name="end_point" placeholder="Любой город" list="cities" value="{{ current_filters.end_point or '' }}">
+                            </div>
+                            
+                            <!-- Даты -->
+                            <div class="col-md-3">
+                                <label for="start_date" class="form-label">Начальная дата</label>
+                                <input type="date" class="form-control" id="start_date" name="start_date" value="{{ current_filters.start_date or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="end_date" class="form-label">Конечная дата</label>
+                                <input type="date" class="form-control" id="end_date" name="end_date" value="{{ current_filters.end_date or '' }}">
+                            </div>
+                            
+                            <!-- Водитель и транспорт -->
+                            <div class="col-md-3">
+                                <label for="driver_filter" class="form-label">Водитель</label>
+                                <select class="form-select" id="driver_filter" name="driver_id">
+                                    <option value="">Все водители</option>
+                                    {% for driver in drivers %}
+                                    <option value="{{ driver.id }}" {% if current_filters.driver_id|string == driver.id|string %}selected{% endif %}>
+                                        {{ driver.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="vehicle_filter" class="form-label">Транспорт</label>
+                                <select class="form-select" id="vehicle_filter" name="vehicle_id">
+                                    <option value="">Весь транспорт</option>
+                                    {% for vehicle in vehicles %}
+                                    <option value="{{ vehicle.id }}" {% if current_filters.vehicle_id|string == vehicle.id|string %}selected{% endif %}>
+                                        {{ vehicle.number }} - {{ vehicle.model }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <!-- Тип груза -->
+                            <div class="col-md-3">
+                                <label for="cargo_type_filter" class="form-label">Тип груза</label>
+                                <select class="form-select" id="cargo_type_filter" name="cargo_type_id">
+                                    <option value="">Все типы</option>
+                                    {% for cargo_type in cargo_types %}
+                                    <option value="{{ cargo_type.id }}" {% if current_filters.cargo_type_id|string == cargo_type.id|string %}selected{% endif %}>
+                                        {{ cargo_type.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="col-12">
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Применить фильтры
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" id="clearFormFilters">
+                                        <i class="fas fa-undo"></i> Сбросить
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Популярные маршруты для быстрого выбора -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-star"></i> Популярные маршруты</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2" id="popular-routes">
+                        {% for route in routes[:5] %}
+                        <button type="button" class="btn btn-outline-primary btn-sm quick-route-filter" 
+                                data-start="{{ route.start_point }}" data-end="{{ route.end_point }}">
+                            <i class="fas fa-map-marker-alt"></i> {{ route.start_point }} → {{ route.end_point }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0"><i class="fas fa-chart-bar"></i> Статистика</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="stat-icon me-2 rounded-circle bg-primary text-white">
+                                            <i class="fas fa-route"></i>
+                                        </div>
+                                        <div>
+                                            <div class="small text-muted">Всего маршрутов</div>
+                                            <h4 class="mb-0" id="total-routes">{{ total_routes }}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <div class="stat-icon me-2 rounded-circle bg-success text-white">
+                                            <i class="fas fa-truck-loading"></i>
+                                        </div>
+                                        <div>
+                                            <div class="small text-muted">Всего рейсов</div>
+                                            <h4 class="mb-0" id="total-trips">{{ total_trips }}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Routes Table -->
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Название</th>
+                            <th>Точка отправления</th>
+                            <th>Точка назначения</th>
+                            <th>Дата</th>
+                            <th>Водитель</th>
+                            <th>Транспорт</th>
+                            <th>Груз</th>
+                            <th>Рейсов</th>
+                            <th>Статус счета</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="routesTableBody">
+                        {% for route in routes %}
+                        <tr>
+                            <td>{{ route.name }}</td>
+                            <td>{{ route.start_point }}</td>
+                            <td>{{ route.end_point }}</td>
+                            <td>{{ route.date.strftime('%d.%m.%Y') }}</td>
+                            <td>{{ route.driver.name if route.driver else 'Не назначен' }}</td>
+                            <td>{{ route.vehicle.number if route.vehicle else 'Не назначен' }}</td>
+                            <td>{{ route.cargo_type.name if route.cargo_type else 'Не указан' }}</td>
+                            <td>{{ route.trips_count }}</td>
+                            <td>
+                                <input type="checkbox" class="form-check-input"
+                                       {% if route.invoice_paid %}checked{% endif %}
+                                       onchange="toggleInvoice('{{ route.id }}', this.checked)">
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="viewRouteDetails('{{ route.id }}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning" onclick="editRoute('{{ route.id }}')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteRoute('{{ route.id }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-center mt-3">
+                <button class="btn btn-outline-primary" id="loadMoreBtn" style="display:none;">
+                    Загрузить ещё
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Route Details Modal -->
+<div class="modal fade" id="routeDetailsModal" tabindex="-1" aria-labelledby="routeDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="routeDetailsModalLabel">Детали маршрута</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="routeDetails"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Route Modal -->
+<div class="modal fade" id="editRouteModal" tabindex="-1" aria-labelledby="editRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editRouteModalLabel">Редактировать маршрут</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editRouteForm" class="row g-3">
+                    <input type="hidden" id="editRouteId">
+                    
+                    <!-- Основная информация -->
+                    <div class="col-md-6">
+                        <label for="editName" class="form-label">Название маршрута</label>
+                        <input type="text" class="form-control" id="editName" name="name" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="editDate" class="form-label">Дата отправления</label>
+                        <input type="date" class="form-control" id="editDate" name="date" required>
+                    </div>
+                    
+                    <!-- Точки маршрута -->
+                    <div class="col-md-6">
+                        <label for="editStartPoint" class="form-label">Точка отправления</label>
+                        <input type="text" class="form-control" id="editStartPoint" name="start_point" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="editEndPoint" class="form-label">Точка назначения</label>
+                        <input type="text" class="form-control" id="editEndPoint" name="end_point" required>
+                    </div>
+                    
+                    <!-- Груз -->
+                    <div class="col-md-4">
+                        <label for="editCargoType" class="form-label">Тип груза</label>
+                        <select class="form-select" id="editCargoType" name="cargo_type_id" required>
+                            <option value="">Выберите тип</option>
+                            {% for cargo_type in cargo_types %}
+                            <option value="{{ cargo_type.id }}">{{ cargo_type.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="editCargoWeight" class="form-label">Вес (т)</label>
+                        <input type="number" class="form-control" id="editCargoWeight" name="cargo_weight" required>
+                        <input type="hidden" id="editWeightUnit" name="weight_unit" value="t">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="editCargoVolume" class="form-label">Объем (м³)</label>
+                        <input type="number" class="form-control" id="editCargoVolume" name="cargo_volume" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="editFuel" class="form-label">Топливо (л)</label>
+                        <input type="number" step="0.01" class="form-control" id="editFuel" name="fuel">
+                    </div>
+                    
+                    <!-- Транспорт и водитель -->
+                    <div class="col-md-6">
+                        <label for="editVehicle" class="form-label">Транспорт</label>
+                        <select class="form-select" id="editVehicle" name="vehicle_id" required>
+                            <option value="">Выберите транспорт</option>
+                            {% for vehicle in vehicles %}
+                            <option value="{{ vehicle.id }}">{{ vehicle.number }} - {{ vehicle.model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="editDriver" class="form-label">Водитель</label>
+                        <select class="form-select" id="editDriver" name="driver_id" required>
+                            <option value="">Выберите водителя</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}" data-vehicle-id="{{ driver.vehicle_id }}">
+                                {{ driver.name }}
+                                {% if driver.vehicle %}
+                                ({{ driver.vehicle.number }})
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Дополнительная информация -->
+                    <div class="col-md-6">
+                        <label for="editTripsCount" class="form-label">Количество рейсов</label>
+                        <input type="number" min="1" class="form-control" id="editTripsCount" name="trips_count" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="editNotes" class="form-label">Примечания</label>
+                        <input type="text" class="form-control" id="editNotes" name="notes">
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" id="editInvoicePaid" name="invoice_paid">
+                            <label class="form-check-label" for="editInvoicePaid">Статус счета (оплачен)</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveRouteChanges()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewRouteDetails(routeId) {
+    fetch(`/api/routes/${routeId}`)
+        .then(response => response.json())
+        .then(route => {
+            const details = document.getElementById('routeDetails');
+            details.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Название:</strong> ${route.name || 'Не указано'}</p>
+                        <p><strong>Маршрут:</strong> ${route.start_point || ''} → ${route.end_point || ''}</p>
+                        <p><strong>Дата:</strong> ${formatDate(route.date)}</p>
+                        <p><strong>Ожидаемое прибытие:</strong> ${formatDate(route.estimated_arrival)}</p>
+                        <p><strong>Фактическое прибытие:</strong> ${formatDate(route.actual_arrival)}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Водитель:</strong> ${route.driver || 'Не назначен'}</p>
+                        <p><strong>Транспорт:</strong> ${route.vehicle || 'Не назначен'}</p>
+                        <p><strong>Тип груза:</strong> ${route.cargo_type || 'Не указан'}</p>
+                        <p><strong>Вес груза:</strong> ${route.cargo_weight || '0'} ${route.weight_unit || 'кг'}</p>
+                        <p><strong>Объем груза:</strong> ${route.cargo_volume || '0'} м³</p>
+                        <p><strong>Топливо:</strong> ${route.fuel || '0'} л</p>
+                        <p><strong>Количество рейсов:</strong> ${route.trips_count || '1'}</p>
+                        <p><strong>Статус счета:</strong> ${route.invoice_paid ? 'Да' : 'Нет'}</p>
+                        <p><strong>Примечания:</strong> ${route.notes || 'Нет примечаний'}</p>
+                    </div>
+                </div>
+            `;
+            new bootstrap.Modal(document.getElementById('routeDetailsModal')).show();
+        });
+}
+
+function editRoute(routeId) {
+    fetch(`/api/routes/${routeId}`)
+        .then(response => response.json())
+        .then(route => {
+            // Заполняем форму данными
+            document.getElementById('editRouteId').value = route.id;
+            document.getElementById('editName').value = route.name;
+            document.getElementById('editStartPoint').value = route.start_point;
+            document.getElementById('editEndPoint').value = route.end_point;
+            document.getElementById('editDate').value = route.date;
+            document.getElementById('editCargoType').value = route.cargo_type_id;
+            document.getElementById('editCargoWeight').value = route.cargo_weight;
+            document.getElementById('editWeightUnit').value = 't';
+            document.getElementById('editCargoVolume').value = route.cargo_volume;
+            document.getElementById('editFuel').value = route.fuel || '';
+            document.getElementById('editVehicle').value = route.vehicle_id;
+            document.getElementById('editDriver').value = route.driver_id;
+            document.getElementById('editTripsCount').value = route.trips_count;
+            document.getElementById('editNotes').value = route.notes || '';
+            document.getElementById('editInvoicePaid').checked = !!route.invoice_paid;
+
+            // Показываем модальное окно
+            new bootstrap.Modal(document.getElementById('editRouteModal')).show();
+        });
+}
+
+function saveRouteChanges() {
+    const routeId = document.getElementById('editRouteId').value;
+    const formData = new FormData(document.getElementById('editRouteForm'));
+    const data = Object.fromEntries(formData.entries());
+    data.invoice_paid = document.getElementById('editInvoicePaid').checked;
+    
+    fetch(`/api/routes/${routeId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Ошибка при сохранении изменений: ' + result.message);
+        }
+    });
+}
+
+function deleteRoute(routeId) {
+    if (confirm('Вы уверены, что хотите удалить этот маршрут?')) {
+        fetch(`/api/routes/${routeId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            location.reload();
+        });
+    }
+}
+
+function resetFilters() {
+    document.getElementById('filterForm').reset();
+    document.getElementById('routeSearch').value = '';
+    nextBeforeDate = null;
+    updateRoutesTable(false, false);
+}
+
+// Автозаполнение при выборе существующего маршрута
+document.getElementById('name').addEventListener('change', function() {
+    const routeName = this.value;
+    const routesData = JSON.parse('{{ routes_data|tojson|safe }}');
+    const route = routesData.find(r => r.name === routeName);
+    
+    if (route) {
+        document.getElementById('start_point').value = route.start_point;
+        document.getElementById('end_point').value = route.end_point;
+        document.getElementById('cargo_type').value = route.cargo_type_id;
+        document.getElementById('cargo_weight').value = route.cargo_weight;
+        document.getElementById('weight_unit').value = 't';
+        document.getElementById('cargo_volume').value = route.cargo_volume;
+        document.getElementById('trips_count').value = route.trips_count;
+        document.getElementById('notes').value = route.notes || '';
+        if (route.fuel !== undefined && route.fuel !== null) {
+            document.getElementById('fuel').value = route.fuel;
+        }
+    }
+});
+
+// Автоматический выбор транспорта при выборе водителя
+document.getElementById('driver').addEventListener('change', function() {
+    const driverId = this.value;
+    const selectedDriver = Array.from(this.options).find(option => option.value === driverId);
+    const vehicleId = selectedDriver ? selectedDriver.dataset.vehicleId : '';
+    const vehicleSelect = document.getElementById('vehicle');
+    
+    if (vehicleId) {
+        vehicleSelect.value = vehicleId;
+        vehicleSelect.classList.add('is-filled');
+        setTimeout(() => vehicleSelect.classList.remove('is-filled'), 1000);
+    }
+});
+
+// Очистка формы
+document.getElementById('clearForm').addEventListener('click', function() {
+    document.getElementById('routeForm').reset();
+});
+
+// Установка текущей даты и времени по умолчанию
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('date').value = now.toISOString().slice(0, 10);
+    
+    // Инициализация таблицы при загрузке страницы
+    nextBeforeDate = null;
+    updateRoutesTable(false, false);
+    
+    // Активация "показать фильтры" по умолчанию
+    const filterCollapse = document.getElementById('filterCollapse');
+    if (filterCollapse) {
+        new bootstrap.Collapse(filterCollapse, {
+            toggle: true
+        });
+    }
+    
+    // Обработчики событий для фильтров
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Быстрые фильтры по дате
+    document.querySelectorAll('.filter-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const period = this.getAttribute('data-filter');
+            setDateFilter(period);
+        });
+    });
+    
+    // Сброс фильтров
+    document.getElementById('resetFilters').addEventListener('click', function() {
+        resetFilters();
+    });
+    
+    // Очистка фильтров формы
+    document.getElementById('clearFormFilters').addEventListener('click', function() {
+        document.getElementById('filterForm').reset();
+        updateRoutesTable();
+    });
+    
+    // Поиск с задержкой ввода
+    let searchTimeout;
+    document.getElementById('routeSearch').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            nextBeforeDate = null;
+            updateRoutesTable(false, false);
+        }, 300);
+    });
+    
+    // Применение фильтров из формы
+    document.getElementById('filterForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        nextBeforeDate = null;
+        updateRoutesTable(false, false);
+    });
+    
+    // Обработчики изменений в селектах и полях ввода фильтров
+    const filterSelectElements = [
+        'driver_filter', 
+        'vehicle_filter', 
+        'cargo_type_filter',
+        'start_date',
+        'end_date',
+        'start_point_filter',
+        'end_point_filter'
+    ];
+    
+    filterSelectElements.forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.addEventListener('change', function() {
+                console.log(`Изменение в фильтре ${elementId}:`, this.value);
+                nextBeforeDate = null;
+                updateRoutesTable(false, false);
+            });
+            
+            // Для текстовых полей добавляем обработчик ввода с задержкой
+            if (element.type === 'text') {
+                let inputTimeout;
+                element.addEventListener('input', function() {
+                    clearTimeout(inputTimeout);
+                    inputTimeout = setTimeout(() => {
+                        console.log(`Ввод в фильтре ${elementId}:`, this.value);
+                        nextBeforeDate = null;
+                        updateRoutesTable(false, false);
+                    }, 500); // Задержка чуть больше, чем для поиска
+                });
+            }
+        } else {
+            console.error(`Элемент с ID ${elementId} не найден`);
+        }
+    });
+    
+    // Добавляем отладочную кнопку
+    const debugButton = document.createElement('button');
+    debugButton.textContent = 'Проверить фильтры';
+    debugButton.className = 'btn btn-secondary mt-2';
+    debugButton.addEventListener('click', function() {
+        const filters = getFilterValues();
+        console.log('Текущие значения фильтров:', filters);
+        alert('Текущие значения фильтров: ' + JSON.stringify(filters));
+    });
+    
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.appendChild(debugButton);
+    }
+
+    // Настройка быстрых фильтров по маршрутам
+    setupQuickRouteFilters();
+
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', function() {
+            loadMoreRoutes();
+        });
+    }
+}
+
+// Функция обновления таблицы маршрутов через AJAX
+let nextBeforeDate = null;
+let lastHasMore = false;
+let forceLoadAll = false;
+
+function updateRoutesTable(append = false, loadAll = false) {
+    const searchQuery = document.getElementById('routeSearch').value;
+    const filters = getFilterValues();
+    
+    console.log("Применяемые фильтры:", filters); // Для отладки
+    
+    const params = new URLSearchParams();
+    
+    // Добавляем параметры только если они не пустые
+    if (searchQuery) params.append('search', searchQuery);
+    if (filters.start_date) params.append('start_date', filters.start_date);
+    if (filters.end_date) params.append('end_date', filters.end_date);
+    if (filters.driver_id) params.append('driver_id', filters.driver_id);
+    if (filters.vehicle_id) params.append('vehicle_id', filters.vehicle_id);
+    if (filters.cargo_type_id) params.append('cargo_type_id', filters.cargo_type_id);
+    if (filters.start_point) params.append('start_point', filters.start_point);
+    if (filters.end_point) params.append('end_point', filters.end_point);
+
+    if (loadAll) {
+        params.append('load_all', '1');
+    } else {
+        if (nextBeforeDate && append) {
+            params.append('before_date', nextBeforeDate);
+        }
+    }
+
+    const url = `/api/routes${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("Запрос:", url); // Для отладки
+
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка сети: ' + response.status);
+            }
+            return response.json();
+        })
+        .then(result => {
+            const { routes, has_more, next_before_date } = result;
+            console.log("Получено маршрутов:", routes.length); // Для отладки
+            const tbody = document.getElementById('routesTableBody');
+            
+            if (!append) {
+                tbody.innerHTML = '';
+            }
+
+            if (!append && routes.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="10" class="text-center">Маршруты не найдены</td>
+                    </tr>
+                `;
+                document.getElementById('total-routes').textContent = '0';
+                document.getElementById('total-trips').textContent = '0';
+                nextBeforeDate = null;
+                lastHasMore = false;
+                forceLoadAll = false;
+            } else {
+                const rowsHtml = routes.map(route => `
+                    <tr>
+                        <td>${route.name}</td>
+                        <td>${route.start_point}</td>
+                        <td>${route.end_point}</td>
+                        <td>${formatDate(route.date)}</td>
+                        <td>${route.driver || 'Не назначен'}</td>
+                        <td>${route.vehicle || 'Не назначен'}</td>
+                        <td>${route.cargo_type || 'Не указан'}</td>
+                        <td class="trips-count">${route.trips_count || '1'}</td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input"
+                                   ${route.invoice_paid ? 'checked' : ''}
+                                   onchange="toggleInvoice('${route.id}', this.checked)">
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-primary" onclick="viewRouteDetails('${route.id}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-warning" onclick="editRoute('${route.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" onclick="deleteRoute('${route.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                tbody.insertAdjacentHTML(append ? 'beforeend' : 'afterbegin', rowsHtml);
+                updateStatistics(append ? collectRoutesFromTable() : routes);
+                nextBeforeDate = next_before_date;
+                lastHasMore = has_more;
+                if (loadAll) {
+                    // Если загрузили всё, отключаем кнопку
+                    nextBeforeDate = null;
+                    lastHasMore = false;
+                    forceLoadAll = false;
+                }
+            }
+
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = lastHasMore ? 'inline-block' : 'none';
+                loadMoreBtn.disabled = !lastHasMore;
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке маршрутов:', error);
+            alert('Ошибка при загрузке маршрутов: ' + error.message);
+        });
+}
+
+function collectRoutesFromTable() {
+    const rows = Array.from(document.querySelectorAll('#routesTableBody tr'))
+        .filter(r => r.querySelector('.trips-count'));
+    return rows.map(r => ({
+        trips_count: r.querySelector('.trips-count')?.textContent || '1'
+    }));
+}
+
+function loadMoreRoutes() {
+    // При клике грузим все оставшиеся данные (снять ограничение по окну и пагинации)
+    nextBeforeDate = null;
+    updateRoutesTable(false, true);
+}
+
+function exportRoutes(format) {
+    const filters = getFilterValues();
+    const searchQuery = document.getElementById('routeSearch').value;
+    const params = new URLSearchParams();
+    if (searchQuery) params.append('search', searchQuery);
+    if (filters.start_date) params.append('start_date', filters.start_date);
+    if (filters.end_date) params.append('end_date', filters.end_date);
+    if (filters.driver_id) params.append('driver_id', filters.driver_id);
+    if (filters.vehicle_id) params.append('vehicle_id', filters.vehicle_id);
+    if (filters.cargo_type_id) params.append('cargo_type_id', filters.cargo_type_id);
+    if (filters.start_point) params.append('start_point', filters.start_point);
+    if (filters.end_point) params.append('end_point', filters.end_point);
+
+    const url = `/routes/export/${format}${params.toString() ? '?' + params.toString() : ''}`;
+    window.open(url, '_blank');
+}
+
+function toggleInvoice(routeId, isChecked) {
+    fetch(`/api/routes/${routeId}/invoice`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invoice_paid: isChecked })
+    }).catch(error => {
+        console.error('Ошибка при обновлении статуса счета:', error);
+        alert('Ошибка при обновлении статуса счета: ' + error.message);
+    });
+}
+
+// Функция для обновления статистики
+function updateStatistics(routes) {
+    // Обновляем количество маршрутов
+    const totalRoutes = routes.length;
+    document.getElementById('total-routes').textContent = totalRoutes;
+    
+    // Считаем общее количество рейсов
+    const totalTrips = routes.reduce((sum, route) => {
+        const tripsCount = parseInt(route.trips_count) || 1;
+        return sum + tripsCount;
+    }, 0);
+    
+    // Обновляем отображение
+    const totalTripsElement = document.getElementById('total-trips');
+    totalTripsElement.textContent = totalTrips;
+    
+    // Анимация при изменении количества
+    totalTripsElement.classList.add('highlight');
+    setTimeout(() => {
+        totalTripsElement.classList.remove('highlight');
+    }, 1000);
+    
+    console.log(`Статистика обновлена: маршрутов - ${totalRoutes}, рейсов - ${totalTrips}`);
+}
+
+// Получение значений фильтров
+function getFilterValues() {
+    const startDate = document.getElementById('start_date');
+    const endDate = document.getElementById('end_date');
+    const driverFilter = document.getElementById('driver_filter');
+    const vehicleFilter = document.getElementById('vehicle_filter');
+    const cargoTypeFilter = document.getElementById('cargo_type_filter');
+    const startPointFilter = document.getElementById('start_point_filter');
+    const endPointFilter = document.getElementById('end_point_filter');
+    
+    // Проверяем, существуют ли элементы перед чтением их значений
+    return {
+        start_date: startDate ? startDate.value : '',
+        end_date: endDate ? endDate.value : '',
+        driver_id: driverFilter && driverFilter.value ? driverFilter.value : '',
+        vehicle_id: vehicleFilter && vehicleFilter.value ? vehicleFilter.value : '',
+        cargo_type_id: cargoTypeFilter && cargoTypeFilter.value ? cargoTypeFilter.value : '',
+        start_point: startPointFilter ? startPointFilter.value.trim() : '',
+        end_point: endPointFilter ? endPointFilter.value.trim() : ''
+    };
+}
+
+// Функция очистки поиска
+function clearSearch() {
+    document.getElementById('routeSearch').value = '';
+    nextBeforeDate = null;
+    updateRoutesTable(false, false);
+}
+
+// Функция для форматирования даты
+function formatDate(dateStr) {
+    // Используем глобальную функцию из main.js
+    if (typeof safeFormatDate === 'function') {
+        return safeFormatDate(dateStr);
+    }
+    
+    // Резервная функция если safeFormatDate не доступна
+    if (!dateStr) return 'Не указана';
+    
+    try {
+        // Иначе конвертируем строку в Date
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+            console.warn('Некорректная дата:', dateStr);
+            return 'Некорректная дата';
+        }
+        
+        return date.toLocaleString('ru-RU', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (error) {
+        console.error('Ошибка при форматировании даты:', error, dateStr);
+        return 'Ошибка даты';
+    }
+}
+
+// Функция установки быстрых фильтров по дате
+function setDateFilter(period) {
+    const today = new Date();
+    const startDate = document.getElementById('start_date');
+    const endDate = document.getElementById('end_date');
+    
+    if (!startDate || !endDate) {
+        console.error('Элементы дат не найдены');
+        return;
+    }
+    
+    console.log('Установка фильтра по дате:', period);
+    
+    switch(period) {
+        case 'today':
+            startDate.value = formatDateForInput(today);
+            endDate.value = formatDateForInput(today);
+            break;
+        case 'tomorrow':
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            startDate.value = formatDateForInput(tomorrow);
+            endDate.value = formatDateForInput(tomorrow);
+            break;
+        case 'week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay());
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            startDate.value = formatDateForInput(weekStart);
+            endDate.value = formatDateForInput(weekEnd);
+            break;
+        case 'month':
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            startDate.value = formatDateForInput(monthStart);
+            endDate.value = formatDateForInput(monthEnd);
+            break;
+    }
+    
+    console.log('Значения дат после установки:', startDate.value, endDate.value);
+    
+    // Автоматически применяем фильтры
+    updateRoutesTable();
+}
+
+// Вспомогательная функция для форматирования даты в формат YYYY-MM-DD для input
+function formatDateForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Добавьте функцию для быстрой фильтрации по популярным маршрутам
+function setupQuickRouteFilters() {
+    const quickFilterButtons = document.querySelectorAll('.quick-route-filter');
+    
+    quickFilterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const startPoint = this.getAttribute('data-start');
+            const endPoint = this.getAttribute('data-end');
+            
+            // Очищаем все поля фильтров
+            resetFilters();
+            
+            // Устанавливаем значения для фильтров по городам
+            const startPointFilter = document.getElementById('start_point_filter');
+            const endPointFilter = document.getElementById('end_point_filter');
+            
+            if (startPointFilter && startPoint) {
+                startPointFilter.value = startPoint;
+            }
+            
+            if (endPointFilter && endPoint) {
+                endPointFilter.value = endPoint;
+            }
+            
+            // Подсвечиваем активную кнопку
+            quickFilterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Применяем фильтры
+            updateRoutesTable();
+        });
+    });
+}
+</script>
+{% endblock %} 

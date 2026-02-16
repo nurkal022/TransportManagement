@@ -1,0 +1,39 @@
+<!-- Add Vehicle Modal -->
+<div class="modal fade" id="addVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить новый транспорт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('vehicles_add') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="number" class="form-label">Номер транспорта</label>
+                        <input type="text" class="form-control" id="number" name="number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="model" class="form-label">Модель</label>
+                        <input type="text" class="form-control" id="model" name="model" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="year" class="form-label">Год выпуска</label>
+                        <input type="number" class="form-control" id="year" name="year" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Статус</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="active">Активен</option>
+                            <option value="repair">В ремонте</option>
+                            <option value="inactive">Неактивен</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить транспорт</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

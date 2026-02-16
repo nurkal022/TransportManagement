@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика - Система Управления Транспортом{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2><i class="fas fa-chart-bar"></i> Статистика и аналитика</h2>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Фильтры</h5>
+        </div>
+        <div class="card-body">
+            <form id="filterForm" class="row g-3">
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Начальная дата</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="{{ current_filters.start_date or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Конечная дата</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="{{ current_filters.end_date or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="driver_filter" class="form-label">Водитель</label>
+                    <select class="form-select" id="driver_filter" name="driver_id">
+                        <option value="">Все водители</option>
+                        {% for driver in drivers %}
+                        <option value="{{ driver.id }}" {% if current_filters.driver_id|string == driver.id|string %}selected{% endif %}>
+                            {{ driver.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="vehicle_filter" class="form-label">Транспорт</label>
+                    <select class="form-select" id="vehicle_filter" name="vehicle_id">
+                        <option value="">Весь транспорт</option>
+                        {% for vehicle in vehicles %}
+                        <option value="{{ vehicle.id }}" {% if current_filters.vehicle_id|string == vehicle.id|string %}selected{% endif %}>
+                            {{ vehicle.number }} - {{ vehicle.model }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="cargo_type_filter" class="form-label">Тип груза</label>
+                    <select class="form-select" id="cargo_type_filter" name="cargo_type_id">
+                        <option value="">Все типы</option>
+                        {% for cargo_type in cargo_types %}
+                        <option value="{{ cargo_type.id }}" {% if current_filters.cargo_type_id|string == cargo_type.id|string %}selected{% endif %}>
+                            {{ cargo_type.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Применить фильтры
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="clearFilters">
+                            <i class="fas fa-undo"></i> Сбросить
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stats-card primary">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Всего маршрутов</h5>
+                    <h2 class="mb-0">{{ total_routes }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card success">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Общий вес груза</h5>
+                    <h2 class="mb-0">{{ "%.1f"|format(total_weight) }} т</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card warning">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Всего рейсов</h5>
+                    <h2 class="mb-0">{{ total_trips }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card info">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Оплаченные счета</h5>
+                    <h2 class="mb-0">{{ paid_invoices }}/{{ total_routes }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Statistics -->
+    <div class="row">
+        <!-- Driver Statistics -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-id-card"></i> Статистика по водителям</h5>
+                </div>
+                <div class="card-body">
+                    {% if driver_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Водитель</th>
+                                    <th>Маршрутов</th>
+                                    <th>Рейсов</th>
+                                    <th>Вес груза (т)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for driver_name, stats in driver_stats.items() %}
+                                <tr>
+                                    <td>{{ driver_name }}</td>
+                                    <td>{{ stats.routes }}</td>
+                                    <td>{{ stats.trips }}</td>
+                                    <td>{{ "%.1f"|format(stats.weight) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-muted">Нет данных по водителям</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Vehicle Statistics -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-truck"></i> Статистика по транспорту</h5>
+                </div>
+                <div class="card-body">
+                    {% if vehicle_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Транспорт</th>
+                                    <th>Маршрутов</th>
+                                    <th>Рейсов</th>
+                                    <th>Вес груза (т)</th>
+                                    <th>Расход топлива (л)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehicle_name, stats in vehicle_stats.items() %}
+                                <tr>
+                                    <td>{{ vehicle_name }}</td>
+                                    <td>{{ stats.routes }}</td>
+                                    <td>{{ stats.trips }}</td>
+                                    <td>{{ "%.1f"|format(stats.weight) }}</td>
+                                    <td>{{ "%.1f"|format(stats.fuel) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-muted">Нет данных по транспорту</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Cargo Type Statistics -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-boxes"></i> Статистика по типам груза</h5>
+                </div>
+                <div class="card-body">
+                    {% if cargo_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Тип груза</th>
+                                    <th>Маршрутов</th>
+                                    <th>Вес (т)</th>
+                                    <th>Объем (м³)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cargo_name, stats in cargo_stats.items() %}
+                                <tr>
+                                    <td>{{ cargo_name }}</td>
+                                    <td>{{ stats.routes }}</td>
+                                    <td>{{ "%.1f"|format(stats.weight) }}</td>
+                                    <td>{{ "%.1f"|format(stats.volume) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-muted">Нет данных по типам груза</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Financial Statistics -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-ruble-sign"></i> Финансовая статистика</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="p-3 bg-success bg-opacity-10 rounded">
+                                <h4 class="text-success">{{ paid_invoices }}</h4>
+                                <p class="mb-0">Оплаченных счетов</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-danger bg-opacity-10 rounded">
+                                <h4 class="text-danger">{{ unpaid_invoices }}</h4>
+                                <p class="mb-0">Неоплаченных счетов</p>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <p><strong>Общий объем:</strong></p>
+                            <p class="text-primary">{{ "%.1f"|format(total_volume) }} м³</p>
+                        </div>
+                        <div class="col-6">
+                            <p><strong>Общий расход топлива:</strong></p>
+                            <p class="text-warning">{{ "%.1f"|format(total_fuel) }} л</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('filterForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const params = new URLSearchParams();
+
+    for (let [key, value] of formData.entries()) {
+        if (value) {
+            params.append(key, value);
+        }
+    }
+
+    window.location.href = '/statistics?' + params.toString();
+});
+
+document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterForm').reset();
+    window.location.href = '/statistics';
+});
+</script>
+{% endblock %}

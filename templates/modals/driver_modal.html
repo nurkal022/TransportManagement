@@ -1,0 +1,36 @@
+<!-- Add Driver Modal -->
+<div class="modal fade" id="addDriverModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Добавить нового водителя</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('drivers_add') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">ФИО</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="contact" class="form-label">Контактный телефон</label>
+                        <input type="text" class="form-control" id="contact" name="contact" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="vehicle" class="form-label">Назначить транспорт</label>
+                        <select class="form-select" id="vehicle" name="vehicle_id">
+                            <option value="">Выберите транспорт</option>
+                            {% for vehicle in available_vehicles %}
+                            <option value="{{ vehicle.id }}">{{ vehicle.number }} - {{ vehicle.model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Добавить водителя</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

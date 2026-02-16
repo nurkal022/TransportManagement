@@ -1,0 +1,222 @@
+/* General Styles */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+/* Card Styles */
+.card {
+    transition: transform 0.2s;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    border-top-left-radius: 0.5rem !important;
+    border-top-right-radius: 0.5rem !important;
+}
+
+/* Dashboard Stats */
+.stats-card {
+    border-left: 4px solid;
+}
+
+.stats-card.primary {
+    border-left-color: #0d6efd;
+}
+
+.stats-card.success {
+    border-left-color: #198754;
+}
+
+.stats-card.warning {
+    border-left-color: #ffc107;
+}
+
+.stats-card.danger {
+    border-left-color: #dc3545;
+}
+
+/* Table Styles */
+.table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+/* Form Styles */
+.form-control:focus, .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.btn {
+    border-radius: 0.35rem;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 0.5em 1em;
+    border-radius: 20px;
+    font-size: 0.85em;
+}
+
+.status-active {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.status-repair {
+    background-color: #fff3cd;
+    color: #664d03;
+}
+
+.status-inactive {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+/* Navigation Active State */
+.nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+/* Search Box */
+.search-box {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.search-box .form-control {
+    padding-left: 2.5rem;
+}
+
+.search-box i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .table-responsive {
+        margin-bottom: 1rem;
+        overflow-x: auto;
+    }
+}
+
+/* Additional Styles */
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+/* Анимация подсветки для обновления статистики */
+.highlight {
+    animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { color: inherit; transform: scale(1); }
+    50% { color: #0d6efd; transform: scale(1.1); }
+    100% { color: inherit; transform: scale(1); }
+}
+
+/* Стили для вспомогательных элементов */
+.is-filled {
+    animation: highlight 1s ease-out;
+}
+
+@keyframes highlight {
+    0% { background-color: #fff; }
+    20% { background-color: #e6f7ff; }
+    100% { background-color: #fff; }
+}
+
+/* Стили для фильтров */
+.filter-form-container {
+    background-color: #f9f9f9;
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+/* Стили для кнопок быстрого фильтра */
+.quick-route-filter {
+    transition: all 0.2s ease;
+    border-radius: 20px;
+    padding: 0.4rem 1rem;
+    white-space: nowrap;
+}
+
+.quick-route-filter.active {
+    background-color: #0d6efd;
+    color: white;
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
+}
+
+.quick-route-filter:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Улучшения для полей фильтров */
+#filterForm .form-control,
+#filterForm .form-select {
+    border-radius: 0.35rem;
+}
+
+#filterForm .form-control:focus,
+#filterForm .form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+#filterForm label {
+    font-weight: 500;
+    color: #555;
+} 
