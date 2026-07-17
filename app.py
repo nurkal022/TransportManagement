@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -138,34 +138,13 @@ class VehicleActivity(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- Admin context (быстрое переключение аккаунтов, только для 'admin') ---
-ADMIN_USERNAME = 'admin'
-
-def is_admin_context():
-    """True, если реальный владелец сессии — админ.
-
-    Верно, когда текущий пользователь — admin, либо мы работаем в режиме
-    имперсонации (в сессии сохранён admin_id, указывающий на admin).
-    """
-    if not current_user.is_authenticated:
-        return False
-    if current_user.username == ADMIN_USERNAME:
-        return True
-    admin_id = session.get('admin_id')
-    if admin_id is not None:
-        admin = User.query.get(admin_id)
-        return bool(admin and admin.username == ADMIN_USERNAME)
-    return False
-
+# --- Переключение аккаунтов (доступно любому вошедшему пользователю) ---
 @app.context_processor
-def inject_admin_context():
-    """Прокидывает в шаблоны флаг админ-контекста и список аккаунтов."""
-    if is_admin_context():
-        return {
-            'is_admin_context': True,
-            'switch_accounts': User.query.order_by(User.username).all(),
-        }
-    return {'is_admin_context': False, 'switch_accounts': []}
+def inject_switch_accounts():
+    """Прокидывает в шаблоны список аккаунтов для быстрого переключения."""
+    if current_user.is_authenticated:
+        return {'switch_accounts': User.query.order_by(User.username).all()}
+    return {'switch_accounts': []}
 
 # Routes
 @app.route('/')
@@ -227,30 +206,15 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-    session.pop('admin_id', None)
     logout_user()
     return redirect(url_for('login'))
 
 @app.route('/switch-account/<int:user_id>')
 @login_required
 def switch_account(user_id):
-    """Быстрое переключение между аккаунтами без пароля (только для admin)."""
-    if not is_admin_context():
-        abort(403)
-
+    """Быстрое переключение между аккаунтами без пароля (для любого вошедшего)."""
     target = User.query.get_or_404(user_id)
-
-    # Запоминаем настоящего админа, чтобы переключатель не пропал при
-    # имперсонации и можно было вернуться обратно.
-    if 'admin_id' not in session and current_user.username == ADMIN_USERNAME:
-        session['admin_id'] = current_user.id
-
     login_user(target)
-
-    # Вернулись под admin — выходим из режима имперсонации.
-    if target.username == ADMIN_USERNAME:
-        session.pop('admin_id', None)
-
     flash(f'Вы вошли как «{target.username}»', 'success')
     return redirect(request.referrer or url_for('index'))
 
@@ -345,16 +309,12 @@ def _summary_data(date_from, date_to):
 @app.route('/summary')
 @login_required
 def summary():
-    if not is_admin_context():
-        abort(403)
     data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
     return render_template('summary.html', **data)
 
 @app.route('/summary/export.xlsx')
 @login_required
 def summary_export():
-    if not is_admin_context():
-        abort(403)
     data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
 
     output = BytesIO()
