@@ -1,2 +1,19 @@
-/.DS_Store
-/__pycache__
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime / server
+*.sock
+
+# Database (contains live data — never commit)
+instance/
+*.db
+
+# Local backups / clutter
+*.backup
+backup_*/
+aa.txt
+
+.DS_Store
