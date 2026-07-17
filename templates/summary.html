@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Все данные - Система Управления Транспортом{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2><i class="fas fa-layer-group"></i> Все данные — сводка по маршрутам</h2>
+            <p class="text-muted mb-0">Аналитика по всем аккаунтам для отчётности (только просмотр).</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <a class="btn btn-success" href="{{ url_for('summary_export', date_from=date_from, date_to=date_to) }}">
+                <i class="fas fa-file-excel"></i> Скачать Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- Фильтр периода -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Период</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="date_from" class="form-label">С даты</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="date_to" class="form-label">По дату</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Показать</button>
+                    <a href="{{ url_for('summary') }}" class="btn btn-outline-secondary">Сбросить</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Итоги -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0">{{ totals.routes }}</div><div class="text-muted small">Маршрутов</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0">{{ totals.trips }}</div><div class="text-muted small">Рейсов</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0">{{ '%.1f'|format(totals.weight) }}</div><div class="text-muted small">Вес груза, т</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0">{{ '%.0f'|format(totals.fuel) }}</div><div class="text-muted small">Топливо, л</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0 text-success">{{ totals.paid }}</div><div class="text-muted small">Счета оплачены</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3 col-xl-2">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="h3 mb-0 text-danger">{{ totals.unpaid }}</div><div class="text-muted small">Не оплачены</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- По аккаунтам -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-users"></i> По аккаунтам</div>
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Аккаунт</th><th class="text-end">Маршрутов</th><th class="text-end">Рейсов</th><th class="text-end">Вес, т</th><th class="text-end">Топливо, л</th></tr></thead>
+                        <tbody>
+                        {% for a in per_account %}
+                            <tr>
+                                <td><i class="fas fa-user text-muted"></i> {{ a.username }}</td>
+                                <td class="text-end">{{ a.routes }}</td>
+                                <td class="text-end">{{ a.trips }}</td>
+                                <td class="text-end">{{ '%.1f'|format(a.weight) }}</td>
+                                <td class="text-end">{{ '%.0f'|format(a.fuel) }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Помесячно -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-calendar-alt"></i> Помесячно</div>
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Месяц</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
+                        <tbody>
+                        {% for m in by_month %}
+                            <tr><td>{{ m.month }}</td><td class="text-end">{{ m.routes }}</td><td class="text-end">{{ '%.1f'|format(m.weight) }}</td></tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- По типам груза -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-boxes"></i> По типам груза</div>
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Тип груза</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
+                        <tbody>
+                        {% for c in by_cargo %}
+                            <tr><td>{{ c.name }}</td><td class="text-end">{{ c.routes }}</td><td class="text-end">{{ '%.1f'|format(c.weight) }}</td></tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- По машинам -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-truck"></i> По машинам (топ-15)</div>
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Машина</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
+                        <tbody>
+                        {% for v in by_vehicle %}
+                            <tr><td>{{ v.number }} — {{ v.model }}</td><td class="text-end">{{ v.routes }}</td><td class="text-end">{{ '%.1f'|format(v.weight) }}</td></tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

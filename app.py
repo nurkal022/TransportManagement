@@ -1,10 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
-from sqlalchemy import or_, and_, text, inspect
+from sqlalchemy import or_, and_, text, inspect, func
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
@@ -138,6 +138,35 @@ class VehicleActivity(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# --- Admin context (быстрое переключение аккаунтов, только для 'admin') ---
+ADMIN_USERNAME = 'admin'
+
+def is_admin_context():
+    """True, если реальный владелец сессии — админ.
+
+    Верно, когда текущий пользователь — admin, либо мы работаем в режиме
+    имперсонации (в сессии сохранён admin_id, указывающий на admin).
+    """
+    if not current_user.is_authenticated:
+        return False
+    if current_user.username == ADMIN_USERNAME:
+        return True
+    admin_id = session.get('admin_id')
+    if admin_id is not None:
+        admin = User.query.get(admin_id)
+        return bool(admin and admin.username == ADMIN_USERNAME)
+    return False
+
+@app.context_processor
+def inject_admin_context():
+    """Прокидывает в шаблоны флаг админ-контекста и список аккаунтов."""
+    if is_admin_context():
+        return {
+            'is_admin_context': True,
+            'switch_accounts': User.query.order_by(User.username).all(),
+        }
+    return {'is_admin_context': False, 'switch_accounts': []}
+
 # Routes
 @app.route('/')
 @login_required
@@ -198,8 +227,202 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+    session.pop('admin_id', None)
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/switch-account/<int:user_id>')
+@login_required
+def switch_account(user_id):
+    """Быстрое переключение между аккаунтами без пароля (только для admin)."""
+    if not is_admin_context():
+        abort(403)
+
+    target = User.query.get_or_404(user_id)
+
+    # Запоминаем настоящего админа, чтобы переключатель не пропал при
+    # имперсонации и можно было вернуться обратно.
+    if 'admin_id' not in session and current_user.username == ADMIN_USERNAME:
+        session['admin_id'] = current_user.id
+
+    login_user(target)
+
+    # Вернулись под admin — выходим из режима имперсонации.
+    if target.username == ADMIN_USERNAME:
+        session.pop('admin_id', None)
+
+    flash(f'Вы вошли как «{target.username}»', 'success')
+    return redirect(request.referrer or url_for('index'))
+
+# --- Сводка «Все данные» (по всем пользователям, только чтение, admin) ---
+def _summary_data(date_from, date_to):
+    """Собирает агрегированную сводку по маршрутам всех пользователей.
+
+    date_from/date_to — строки 'YYYY-MM-DD' или None. Возвращает dict с
+    итогами и разбивками. Данные только читаются.
+    """
+    conditions = []
+    if date_from:
+        try:
+            conditions.append(Route.date >= datetime.strptime(date_from, '%Y-%m-%d'))
+        except ValueError:
+            date_from = None
+    if date_to:
+        try:
+            conditions.append(Route.date < datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        except ValueError:
+            date_to = None
+
+    base = Route.query.filter(*conditions)
+    total_routes = base.count()
+
+    trips, weight, fuel, volume = db.session.query(
+        func.coalesce(func.sum(Route.trips_count), 0),
+        func.coalesce(func.sum(Route.cargo_weight), 0.0),
+        func.coalesce(func.sum(Route.fuel), 0.0),
+        func.coalesce(func.sum(Route.cargo_volume), 0.0),
+    ).filter(*conditions).one()
+
+    paid = base.filter(Route.invoice_paid == True).count()
+    unpaid = total_routes - paid
+
+    # Разбивка по аккаунтам (включая пустые)
+    per_account = []
+    for u in User.query.order_by(User.username).all():
+        uc = conditions + [Route.user_id == u.id]
+        cnt = Route.query.filter(*uc).count()
+        t, w, f = db.session.query(
+            func.coalesce(func.sum(Route.trips_count), 0),
+            func.coalesce(func.sum(Route.cargo_weight), 0.0),
+            func.coalesce(func.sum(Route.fuel), 0.0),
+        ).filter(*uc).one()
+        per_account.append({'username': u.username, 'routes': cnt,
+                            'trips': t, 'weight': w, 'fuel': f})
+    per_account.sort(key=lambda a: a['routes'], reverse=True)
+
+    # По типам груза
+    cargo_rows = db.session.query(
+        func.coalesce(CargoType.name, '—'),
+        func.count(Route.id),
+        func.coalesce(func.sum(Route.cargo_weight), 0.0),
+    ).select_from(Route).outerjoin(CargoType, Route.cargo_type_id == CargoType.id) \
+     .filter(*conditions).group_by(CargoType.name) \
+     .order_by(func.count(Route.id).desc()).all()
+    by_cargo = [{'name': r[0], 'routes': r[1], 'weight': r[2]} for r in cargo_rows]
+
+    # По машинам (топ-15)
+    veh_rows = db.session.query(
+        Vehicle.number, Vehicle.model,
+        func.count(Route.id),
+        func.coalesce(func.sum(Route.cargo_weight), 0.0),
+    ).select_from(Route).join(Vehicle, Route.vehicle_id == Vehicle.id) \
+     .filter(*conditions).group_by(Vehicle.id) \
+     .order_by(func.count(Route.id).desc()).limit(15).all()
+    by_vehicle = [{'number': r[0], 'model': r[1], 'routes': r[2], 'weight': r[3]} for r in veh_rows]
+
+    # Помесячно
+    month_rows = db.session.query(
+        func.strftime('%Y-%m', Route.date),
+        func.count(Route.id),
+        func.coalesce(func.sum(Route.cargo_weight), 0.0),
+    ).filter(*conditions).group_by(func.strftime('%Y-%m', Route.date)) \
+     .order_by(func.strftime('%Y-%m', Route.date).desc()).all()
+    by_month = [{'month': r[0], 'routes': r[1], 'weight': r[2]} for r in month_rows]
+
+    return {
+        'date_from': date_from or '',
+        'date_to': date_to or '',
+        'totals': {
+            'routes': total_routes, 'trips': trips, 'weight': weight,
+            'fuel': fuel, 'volume': volume, 'paid': paid, 'unpaid': unpaid,
+        },
+        'per_account': per_account,
+        'by_cargo': by_cargo,
+        'by_vehicle': by_vehicle,
+        'by_month': by_month,
+    }
+
+@app.route('/summary')
+@login_required
+def summary():
+    if not is_admin_context():
+        abort(403)
+    data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
+    return render_template('summary.html', **data)
+
+@app.route('/summary/export.xlsx')
+@login_required
+def summary_export():
+    if not is_admin_context():
+        abort(403)
+    data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
+
+    output = BytesIO()
+    wb = Workbook()
+    header_font = Font(bold=True)
+
+    def style_header(ws):
+        for cell in ws[1]:
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+    def autosize(ws):
+        for column_cells in ws.columns:
+            length = max((len(str(c.value)) if c.value is not None else 0) for c in column_cells)
+            ws.column_dimensions[column_cells[0].column_letter].width = min(max(length + 2, 10), 40)
+
+    t = data['totals']
+    ws = wb.active
+    ws.title = "Итоги"
+    ws.append(["Показатель", "Значение"])
+    style_header(ws)
+    period = f"{data['date_from'] or 'начало'} — {data['date_to'] or 'сейчас'}"
+    for row in [
+        ("Период", period),
+        ("Маршрутов", t['routes']),
+        ("Рейсов", t['trips']),
+        ("Вес груза (т)", round(t['weight'], 2)),
+        ("Топливо (л)", round(t['fuel'], 2)),
+        ("Объём", round(t['volume'], 2)),
+        ("Счета оплачены", t['paid']),
+        ("Счета не оплачены", t['unpaid']),
+    ]:
+        ws.append(list(row))
+    autosize(ws)
+
+    ws = wb.create_sheet("По аккаунтам")
+    ws.append(["Аккаунт", "Маршрутов", "Рейсов", "Вес (т)", "Топливо (л)"])
+    style_header(ws)
+    for a in data['per_account']:
+        ws.append([a['username'], a['routes'], a['trips'], round(a['weight'], 2), round(a['fuel'], 2)])
+    autosize(ws)
+
+    ws = wb.create_sheet("По типам груза")
+    ws.append(["Тип груза", "Маршрутов", "Вес (т)"])
+    style_header(ws)
+    for c in data['by_cargo']:
+        ws.append([c['name'], c['routes'], round(c['weight'], 2)])
+    autosize(ws)
+
+    ws = wb.create_sheet("По машинам")
+    ws.append(["Номер", "Модель", "Маршрутов", "Вес (т)"])
+    style_header(ws)
+    for v in data['by_vehicle']:
+        ws.append([v['number'], v['model'], v['routes'], round(v['weight'], 2)])
+    autosize(ws)
+
+    ws = wb.create_sheet("Помесячно")
+    ws.append(["Месяц", "Маршрутов", "Вес (т)"])
+    style_header(ws)
+    for m in data['by_month']:
+        ws.append([m['month'], m['routes'], round(m['weight'], 2)])
+    autosize(ws)
+
+    wb.save(output)
+    output.seek(0)
+    filename = f"summary_{data['date_from'] or 'all'}_{data['date_to'] or 'all'}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 # Cargo Types
 @app.route('/cargo_types')
