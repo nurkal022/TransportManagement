@@ -117,6 +117,14 @@ a{text-decoration:none}
 }
 .card-header.bg-primary{background:var(--tm-brand)!important;border-color:transparent}
 .card-header.text-white{color:#fff!important}
+/* Текст и иконки на синих заголовках — всегда белые (иначе тёмный текст на синем) */
+.card-header.bg-primary, .modal-header.bg-primary,
+.card-header.bg-primary h1, .card-header.bg-primary h2, .card-header.bg-primary h3, .card-header.bg-primary h4, .card-header.bg-primary h5,
+.modal-header.bg-primary h1, .modal-header.bg-primary h2, .modal-header.bg-primary h3, .modal-header.bg-primary h4, .modal-header.bg-primary h5,
+.card-header.bg-primary .card-title, .modal-header.bg-primary .modal-title,
+.card-header.bg-primary a, .modal-header.bg-primary a,
+.card-header.bg-primary i, .modal-header.bg-primary i{color:#fff !important}
+.modal-header.bg-primary .btn-close{filter:invert(1) grayscale(1) brightness(2)}
 
 /* ---------- Карточки-показатели ---------- */
 .stats-card{border-left:none;position:relative;overflow:hidden}
