@@ -25,32 +25,32 @@
                 <ul class="navbar-nav me-auto">
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
+                        <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
                             <i class="fas fa-home"></i> Главная
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('routes') }}">
+                        <a class="nav-link {% if request.endpoint == 'routes' %}active{% endif %}" href="{{ url_for('routes') }}">
                             <i class="fas fa-route"></i> Маршруты
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('drivers') }}">
+                        <a class="nav-link {% if request.endpoint == 'drivers' %}active{% endif %}" href="{{ url_for('drivers') }}">
                             <i class="fas fa-id-card"></i> Водители
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('vehicles') }}">
+                        <a class="nav-link {% if request.endpoint == 'vehicles' %}active{% endif %}" href="{{ url_for('vehicles') }}">
                             <i class="fas fa-truck"></i> Транспорт
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('cargo_types') }}">
+                        <a class="nav-link {% if request.endpoint == 'cargo_types' %}active{% endif %}" href="{{ url_for('cargo_types') }}">
                             <i class="fas fa-boxes"></i> Типы груза
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('statistics') }}">
+                        <a class="nav-link {% if request.endpoint == 'statistics' %}active{% endif %}" href="{{ url_for('statistics') }}">
                             <i class="fas fa-chart-bar"></i> Статистика
                         </a>
                     </li>
@@ -117,7 +117,7 @@
     <!-- Footer -->
     <footer class="footer mt-5 py-3 bg-light">
         <div class="container text-center">
-            <span class="text-muted">© 2023 Система Управления Транспортом</span>
+            <span class="text-muted">Система управления транспортом · {{ current_user.username if current_user.is_authenticated else '' }}</span>
         </div>
     </footer>
 
