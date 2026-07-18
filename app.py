@@ -241,6 +241,10 @@ def switch_account(user_id):
     return redirect(request.referrer or url_for('index'))
 
 # --- Сводка «Все данные» (по всем пользователям, только чтение, admin) ---
+def clean_point(s):
+    """Убирает лишние пробелы в названии точки, чтобы не плодить дубли."""
+    return re.sub(r'\s+', ' ', (s or '').strip())
+
 def _route_filters(args):
     """По параметрам запроса собирает условия SQLAlchemy и словарь значений фильтра."""
     conditions = []
@@ -926,6 +930,11 @@ def routes():
     
     routes_data = [route.to_dict() for route in routes]
     
+    start_points = [p[0] for p in db.session.query(Route.start_point)
+                    .distinct().order_by(Route.start_point).all() if p[0]]
+    end_points = [p[0] for p in db.session.query(Route.end_point)
+                  .distinct().order_by(Route.end_point).all() if p[0]]
+
     return render_template('routes.html',
                          routes=routes,
                          drivers=drivers,
@@ -935,15 +944,17 @@ def routes():
                          total_routes=total_routes,
                          total_trips=total_trips,
                          routes_data=routes_data,
+                         start_points=start_points,
+                         end_points=end_points,
                          default_window_start=default_window_start.date().isoformat())
 
 @app.route('/routes/add', methods=['POST'])
 @login_required
 def routes_add():
     if request.method == 'POST':
-        name = request.form.get('name')
-        start_point = request.form.get('start_point')
-        end_point = request.form.get('end_point')
+        name = (request.form.get('name') or '').strip()
+        start_point = clean_point(request.form.get('start_point'))
+        end_point = clean_point(request.form.get('end_point'))
         date = datetime.strptime(request.form.get('date'), '%Y-%m-%d')
         driver_id = request.form.get('driver_id')
         vehicle_id = request.form.get('vehicle_id')
@@ -1012,9 +1023,9 @@ def route_api(id):
     
     elif request.method == 'PUT':
         data = request.get_json()
-        route.name = data['name']
-        route.start_point = data['start_point']
-        route.end_point = data['end_point']
+        route.name = (data['name'] or '').strip()
+        route.start_point = clean_point(data['start_point'])
+        route.end_point = clean_point(data['end_point'])
         route.date = datetime.strptime(data['date'], '%Y-%m-%d')
         route.driver_id = data.get('driver_id')
         route.vehicle_id = data.get('vehicle_id')

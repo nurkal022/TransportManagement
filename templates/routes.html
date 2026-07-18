@@ -23,17 +23,17 @@
                 </div>
                 <div class="col-md-3">
                     <label for="start_point" class="form-label">Откуда</label>
-                    <input type="text" class="form-control" id="start_point" name="start_point" required list="cities">
-                    <datalist id="cities">
-                        {% for route in routes %}
-                        <option value="{{ route.start_point }}">
-                        <option value="{{ route.end_point }}">
-                        {% endfor %}
+                    <input type="text" class="form-control" id="start_point" name="start_point" required list="startPoints" autocomplete="off">
+                    <datalist id="startPoints">
+                        {% for p in start_points %}<option value="{{ p }}">{% endfor %}
+                    </datalist>
+                    <datalist id="endPoints">
+                        {% for p in end_points %}<option value="{{ p }}">{% endfor %}
                     </datalist>
                 </div>
                 <div class="col-md-3">
                     <label for="end_point" class="form-label">Куда</label>
-                    <input type="text" class="form-control" id="end_point" name="end_point" required list="cities">
+                    <input type="text" class="form-control" id="end_point" name="end_point" required list="endPoints" autocomplete="off">
                 </div>
                 <div class="col-md-3">
                     <label for="date" class="form-label">Дата отправления</label>
@@ -190,11 +190,11 @@
                             <!-- Города отправления и назначения -->
                             <div class="col-md-3">
                                 <label for="start_point_filter" class="form-label">Точка отправления</label>
-                                <input type="text" class="form-control" id="start_point_filter" name="start_point" placeholder="Любой город" list="cities" value="{{ current_filters.start_point or '' }}">
+                                <input type="text" class="form-control" id="start_point_filter" name="start_point" placeholder="Любой город" list="startPoints" value="{{ current_filters.start_point or '' }}">
                             </div>
                             <div class="col-md-3">
                                 <label for="end_point_filter" class="form-label">Точка назначения</label>
-                                <input type="text" class="form-control" id="end_point_filter" name="end_point" placeholder="Любой город" list="cities" value="{{ current_filters.end_point or '' }}">
+                                <input type="text" class="form-control" id="end_point_filter" name="end_point" placeholder="Любой город" list="endPoints" value="{{ current_filters.end_point or '' }}">
                             </div>
                             
                             <!-- Даты -->
@@ -416,11 +416,11 @@
                     <!-- Точки маршрута -->
                     <div class="col-md-6">
                         <label for="editStartPoint" class="form-label">Точка отправления</label>
-                        <input type="text" class="form-control" id="editStartPoint" name="start_point" required>
+                        <input type="text" class="form-control" id="editStartPoint" name="start_point" required list="startPoints" autocomplete="off">
                     </div>
                     <div class="col-md-6">
                         <label for="editEndPoint" class="form-label">Точка назначения</label>
-                        <input type="text" class="form-control" id="editEndPoint" name="end_point" required>
+                        <input type="text" class="form-control" id="editEndPoint" name="end_point" required list="endPoints" autocomplete="off">
                     </div>
                     
                     <!-- Груз -->
