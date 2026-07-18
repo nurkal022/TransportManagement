@@ -1636,6 +1636,35 @@ def statistics():
             cargo_stats[cargo_name]['weight'] += route.cargo_weight or 0
             cargo_stats[cargo_name]['volume'] += route.cargo_volume or 0
 
+    # Помесячная динамика и топы (по отфильтрованным маршрутам)
+    from collections import defaultdict
+    m_routes = defaultdict(int)
+    m_trips = defaultdict(int)
+    m_paid = defaultdict(int)
+    m_unpaid = defaultdict(int)
+    rt_count = defaultdict(int)
+    for route in routes:
+        if route.date:
+            mk = route.date.strftime('%Y-%m')
+            m_routes[mk] += 1
+            m_trips[mk] += route.trips_count or 0
+            if route.invoice_paid:
+                m_paid[mk] += 1
+            else:
+                m_unpaid[mk] += 1
+        rt_count[f"{route.start_point} → {route.end_point}"] += 1
+    months_sorted = sorted(m_routes)
+    monthly = [{'m': mk, 'routes': m_routes[mk], 'trips': m_trips[mk],
+                'paid': m_paid[mk], 'unpaid': m_unpaid[mk]} for mk in months_sorted]
+    top_routes = sorted([{'name': k, 'count': v} for k, v in rt_count.items()],
+                        key=lambda x: -x['count'])[:12]
+    top_drivers = sorted([dict(name=k, **v) for k, v in driver_stats.items()],
+                         key=lambda x: -x['routes'])[:12]
+    top_vehicles = sorted([dict(name=k, **v) for k, v in vehicle_stats.items()],
+                          key=lambda x: -x['routes'])[:12]
+    top_cargo = sorted([dict(name=k, **v) for k, v in cargo_stats.items()],
+                       key=lambda x: -x['routes'])[:12]
+
     # Получаем справочники для фильтров
     drivers = Driver.query.all()
     vehicles = Vehicle.query.all()
@@ -1660,6 +1689,11 @@ def statistics():
                          driver_stats=driver_stats,
                          vehicle_stats=vehicle_stats,
                          cargo_stats=cargo_stats,
+                         monthly=monthly,
+                         top_routes=top_routes,
+                         top_drivers=top_drivers,
+                         top_vehicles=top_vehicles,
+                         top_cargo=top_cargo,
                          drivers=drivers,
                          vehicles=vehicles,
                          cargo_types=cargo_types,

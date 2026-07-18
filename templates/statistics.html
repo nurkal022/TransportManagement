@@ -108,6 +108,28 @@
         </div>
     </div>
 
+    <!-- Charts -->
+    <div class="card mb-4">
+        <div class="card-header"><i class="fas fa-chart-line"></i> Динамика по месяцам</div>
+        <div class="card-body">
+            <div class="mb-2" style="display:flex;gap:16px;font-size:12.5px;color:var(--tm-ink-2)">
+                <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--tm-brand)"></i> Маршруты</span>
+                <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#4a3aa7"></i> Рейсы</span>
+            </div>
+            <div id="stMonthly"></div>
+        </div>
+    </div>
+    <div class="card mb-4">
+        <div class="card-header"><i class="fas fa-file-invoice-dollar"></i> Оплата по месяцам <span class="text-muted small">(доля оплаченных, %)</span></div>
+        <div class="card-body"><div id="stPay"></div></div>
+    </div>
+    <div class="row">
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="fas fa-id-card"></i> Топ водителей <span class="text-muted small">(маршруты)</span></div><div class="card-body"><div id="stDrivers"></div></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="fas fa-truck"></i> Топ машин <span class="text-muted small">(маршруты)</span></div><div class="card-body"><div id="stVehicles"></div></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="fas fa-boxes"></i> Топ типов груза <span class="text-muted small">(маршруты)</span></div><div class="card-body"><div id="stCargo"></div></div></div></div>
+        <div class="col-lg-6 mb-4"><div class="card h-100"><div class="card-header"><i class="fas fa-route"></i> Топ направлений</div><div class="card-body"><div id="stRoutes"></div></div></div></div>
+    </div>
+
     <!-- Detailed Statistics -->
     <div class="row">
         <!-- Driver Statistics -->
@@ -282,5 +304,28 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterForm').reset();
     window.location.href = '/statistics';
 });
+</script>
+
+<script id="st-data" type="application/json">
+{ "monthly": {{ monthly|tojson }}, "drivers": {{ top_drivers|tojson }}, "vehicles": {{ top_vehicles|tojson }}, "cargo": {{ top_cargo|tojson }}, "routes": {{ top_routes|tojson }} }
+</script>
+<script>
+(function(){
+  const el = document.getElementById('st-data');
+  if (!el || !window.TMChart) return;
+  const D = JSON.parse(el.textContent);
+  if (D.monthly.length) {
+    TMChart.line('stMonthly', {x: D.monthly.map(m=>m.m.slice(2)), series:[
+      {name:'Маршруты', color:'var(--tm-brand)', values: D.monthly.map(m=>m.routes)},
+      {name:'Рейсы', color:'#4a3aa7', values: D.monthly.map(m=>m.trips)}]});
+    TMChart.line('stPay', {x: D.monthly.map(m=>m.m.slice(2)), unit:'%', series:[
+      {name:'Оплачено', color:'#0a8f0a',
+       values: D.monthly.map(m=> (m.paid+m.unpaid) ? Math.round(m.paid/(m.paid+m.unpaid)*100) : 0)}]});
+  }
+  TMChart.hbars('stDrivers', D.drivers.map(d=>({label:d.name, value:d.routes, sub:d.trips+' рейсов'})));
+  TMChart.hbars('stVehicles', D.vehicles.map(d=>({label:d.name, value:d.routes})));
+  TMChart.hbars('stCargo', D.cargo.map(d=>({label:d.name, value:d.routes, color:'#6da7ec'})));
+  TMChart.hbars('stRoutes', D.routes.map(d=>({label:d.name, value:d.count, color:'#6da7ec'})));
+})();
 </script>
 {% endblock %}
