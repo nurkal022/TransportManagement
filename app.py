@@ -1544,15 +1544,6 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
 
-    # Create user user if not exists
-    if not User.query.filter_by(username='user').first():
-        user = User(
-            username='user',
-            password=generate_password_hash('user')
-        )
-        db.session.add(user)
-        db.session.commit()
-
 if __name__ == '__main__':
     # Создаем админа, если его нет
     with app.app_context():
