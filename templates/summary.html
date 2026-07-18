@@ -140,14 +140,15 @@
         <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead><tr>
-                    <th>Дата</th><th>Откуда → Куда</th><th>Водитель</th><th>Машина</th><th>Груз</th>
+                    <th>Дата</th><th>Откуда</th><th>Куда</th><th>Водитель</th><th>Машина</th><th>Груз</th>
                     <th class="text-end">Рейсов</th><th class="text-end">Вес, т</th><th>Оплата</th><th>Аккаунт</th>
                 </tr></thead>
                 <tbody>
                 {% for r in routes_page.items %}
                     <tr>
                         <td class="mono">{{ r.date.strftime('%d.%m.%Y') if r.date else '' }}</td>
-                        <td>{{ r.start_point }} → {{ r.end_point }}</td>
+                        <td>{{ r.start_point }}</td>
+                        <td>{{ r.end_point }}</td>
                         <td>{{ r.driver.name if r.driver else '—' }}</td>
                         <td class="mono">{{ r.vehicle.number if r.vehicle else '—' }}</td>
                         <td>{{ r.cargo_type.name if r.cargo_type else '—' }}</td>
@@ -157,7 +158,7 @@
                         <td class="mono">{{ r.owner.username if r.owner else '' }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="9" class="text-center text-muted py-4">Ничего не найдено по заданным фильтрам</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">Ничего не найдено по заданным фильтрам</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
