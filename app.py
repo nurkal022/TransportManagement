@@ -154,7 +154,7 @@ def index():
     total_routes = Route.query.filter_by(user_id=current_user.id).count()
     total_drivers = Driver.query.filter_by(user_id=current_user.id).count()
     total_vehicles = Vehicle.query.filter_by(user_id=current_user.id).count()
-    total_cargo_types = CargoType.query.filter_by(user_id=current_user.id).count()
+    total_cargo_types = CargoType.query.count()
 
     # Статистика транспорта
     active_vehicles = Vehicle.query.filter_by(user_id=current_user.id, status='active').count()
@@ -388,7 +388,8 @@ def summary_export():
 @app.route('/cargo_types')
 @login_required
 def cargo_types():
-    cargo_types = CargoType.query.filter_by(user_id=current_user.id).all()
+    # Типы груза общие для всех аккаунтов
+    cargo_types = CargoType.query.order_by(CargoType.name).all()
     return render_template('cargo_types.html', cargo_types=cargo_types)
 
 @app.route('/cargo_types/add', methods=['POST'])
@@ -408,7 +409,8 @@ def cargo_types_add():
 @app.route('/api/cargo_types/<int:id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def cargo_type_api(id):
-    cargo_type = CargoType.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+    # Типы груза общие — доступны любому вошедшему
+    cargo_type = CargoType.query.get_or_404(id)
     
     if request.method == 'GET':
         return jsonify({
