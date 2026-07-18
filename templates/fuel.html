@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Топливо - Gulim Logistics{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h2 class="mb-1"><i class="fas fa-gas-pump"></i> Топливо по картам</h2>
+        <p class="text-muted mb-0">Заправки водителей: литры, суммы и связь с рейсами.
+        {% if period[0] %}<span class="mono"> Период данных: {{ period[0] }} — {{ period[1] }}.</span>{% endif %}</p>
+    </div>
+    {% if has_data %}
+    <a class="btn btn-success" href="{{ url_for('fuel_export', date_from=date_from, date_to=date_to) }}">
+        <i class="fas fa-file-excel"></i> Скачать Excel
+    </a>
+    {% endif %}
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header"><i class="fas fa-filter"></i> Период</div>
+            <div class="card-body">
+                <form method="get" class="row g-3 align-items-end">
+                    <div class="col-sm-5">
+                        <label class="form-label">С даты</label>
+                        <input type="date" class="form-control" name="date_from" value="{{ date_from }}">
+                    </div>
+                    <div class="col-sm-5">
+                        <label class="form-label">По дату</label>
+                        <input type="date" class="form-control" name="date_to" value="{{ date_to }}">
+                    </div>
+                    <div class="col-sm-2 d-grid">
+                        <button class="btn btn-primary"><i class="fas fa-search"></i></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header"><i class="fas fa-upload"></i> Загрузить выгрузку карт (.xlsx)</div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('fuel_import') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    <div class="col-8">
+                        <input type="file" class="form-control" name="file" accept=".xlsx" required>
+                    </div>
+                    <div class="col-4 d-grid">
+                        <button class="btn btn-outline-primary"><i class="fas fa-cloud-upload-alt"></i> Загрузить</button>
+                    </div>
+                    <div class="col-12"><small class="text-muted">Повторная загрузка того же файла не создаёт дублей — сверка по номеру транзакции.</small></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not has_data %}
+<div class="card"><div class="card-body text-center py-5">
+    <i class="fas fa-gas-pump fa-2x text-muted mb-3"></i>
+    <h5>Пока нет данных по топливу</h5>
+    <p class="text-muted mb-0">Загрузите выгрузку транзакций топливных карт (.xlsx) в форме выше — и здесь появится дашборд.</p>
+</div></div>
+{% else %}
+
+<!-- KPI -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-xl">
+        <div class="card stats-card primary h-100"><div class="card-body">
+            <div class="card-title">Литров всего</div><h2 class="mb-0">{{ '{:,}'.format(totals.liters).replace(',', ' ') }}</h2>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="card stats-card warning h-100"><div class="card-body">
+            <div class="card-title">Сумма, ₸</div><h2 class="mb-0">{{ '{:,}'.format(totals.amount).replace(',', ' ') }}</h2>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="card stats-card info h-100"><div class="card-body">
+            <div class="card-title">Цена, ₸/л</div><h2 class="mb-0">{{ totals.price }}</h2>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="card stats-card success h-100"><div class="card-body">
+            <div class="card-title">Заправок</div><h2 class="mb-0">{{ totals.tx }}</h2>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+        <div class="card stats-card h-100"><div class="card-body">
+            <div class="card-title">Карт водителей</div><h2 class="mb-0">{{ totals.drivers }}</h2>
+        </div></div>
+    </div>
+</div>
+
+<!-- Monthly -->
+<div class="card mb-4">
+    <div class="card-header"><i class="fas fa-calendar-alt"></i> Расход по месяцам <span class="text-muted small">(литры)</span></div>
+    <div class="card-body"><div id="fuelMonth"></div></div>
+</div>
+
+<!-- Correlation -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-link"></i> Топливо ↔ рейсы</span>
+        <span class="badge {% if corr_r >= 0.7 %}bg-success{% elif corr_r >= 0.4 %}bg-warning{% else %}bg-secondary{% endif %}">r = {{ corr_r }}</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-2">Обе величины нормированы к своему максимуму (%). Чем ближе линии — тем точнее топливо отражает объём работы.</p>
+        <div class="legend mb-2" style="display:flex;gap:16px;font-size:12.5px;color:var(--tm-ink-2)">
+            <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--tm-brand)"></i> Топливо, л</span>
+            <span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#4a3aa7"></i> Рейсы</span>
+        </div>
+        <div id="fuelCorr"></div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="fas fa-user"></i> Топ по расходу — водители</div>
+            <div class="card-body"><div id="fuelDrivers"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="fas fa-map-marker-alt"></i> Заправки по АЗС</div>
+            <div class="card-body"><div id="fuelStations"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- per-vehicle correlation table -->
+<div class="card mb-4">
+    <div class="card-header"><i class="fas fa-truck"></i> Расход на рейс по машинам <span class="text-muted small">(литры ÷ рейсы за период)</span></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Машина</th><th class="text-end">Литры</th><th class="text-end">Рейсы</th><th class="text-end">Л / рейс</th><th>Заметка</th></tr></thead>
+            <tbody>
+            {% set med = (per_vehicle | selectattr('lpt') | map(attribute='lpt') | list | sort)[( (per_vehicle | selectattr('lpt') | list | length) // 2 )] if (per_vehicle | selectattr('lpt') | list | length) else 0 %}
+            {% for v in per_vehicle %}
+                <tr>
+                    <td class="mono">{{ v.vehicle }}</td>
+                    <td class="text-end num">{{ '{:,}'.format(v.liters).replace(',', ' ') }}</td>
+                    <td class="text-end num">{{ v.trips }}</td>
+                    <td class="text-end num">{{ v.lpt if v.lpt is not none else '—' }}</td>
+                    {% if v.trips == 0 %}<td><span class="text-danger small">⚠ топливо есть, рейсов нет</span></td>
+                    {% elif v.lpt and med and v.lpt > med * 1.5 %}<td><span class="text-danger small">↑ высокий расход</span></td>
+                    {% else %}<td><span class="text-muted small">в норме</span></td>{% endif %}
+                </tr>
+            {% else %}
+                <tr><td colspan="5" class="text-center text-muted">Нет сопоставленных машин</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if has_data %}
+<script id="fuel-data" type="application/json">
+{
+  "by_month": {{ by_month | tojson }},
+  "by_driver": {{ by_driver | tojson }},
+  "by_station": {{ by_station | tojson }},
+  "corr_months": {{ corr_months | tojson }},
+  "corr_fuel": {{ corr_fuel | tojson }},
+  "corr_trips": {{ corr_trips | tojson }}
+}
+</script>
+<script>
+(function(){
+  const D = JSON.parse(document.getElementById('fuel-data').textContent);
+  TMChart.vbars('fuelMonth', {labels: D.by_month.map(m=>m.m.slice(2)), values: D.by_month.map(m=>m.liters), name:'Литры', unit:' л', color:'var(--tm-brand)'});
+  TMChart.line('fuelCorr', {x: D.corr_months.map(m=>m.slice(2)), normalize:true, series:[
+     {name:'Топливо, л', color:'var(--tm-brand)', values: D.corr_fuel},
+     {name:'Рейсы', color:'#4a3aa7', values: D.corr_trips}
+  ]});
+  TMChart.hbars('fuelDrivers', D.by_driver.map(d=>({label:d.name, value:d.liters, sub:TMChart.nf(d.amount)+' ₸', color:'var(--tm-brand)'})), {unit:' л'});
+  TMChart.hbars('fuelStations', D.by_station.map(s=>({label:s.name, value:s.liters, color:'#6da7ec'})), {unit:' л'});
+})();
+</script>
+{% endif %}
+{% endblock %}

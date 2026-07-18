@@ -4,9 +4,10 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
+import re
 from sqlalchemy import or_, and_, text, inspect, func
 from io import BytesIO
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, A4
@@ -133,6 +134,26 @@ class VehicleActivity(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     vehicle = db.relationship('Vehicle', backref='activities')
+
+# --- Топливо по картам (общие данные) ---
+class FuelCard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    card = db.Column(db.String(40), unique=True, nullable=False)
+    label = db.Column(db.String(120))
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'))
+    vehicle = db.relationship('Vehicle')
+
+class FuelTransaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    txn_id = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    date = db.Column(db.DateTime, index=True)
+    card = db.Column(db.String(40), index=True)
+    holder = db.Column(db.String(120))
+    station = db.Column(db.String(120))
+    address = db.Column(db.String(255))
+    product = db.Column(db.String(60))
+    liters = db.Column(db.Float, default=0)
+    amount = db.Column(db.Float, default=0)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -305,6 +326,267 @@ def _summary_data(date_from, date_to):
         'by_vehicle': by_vehicle,
         'by_month': by_month,
     }
+
+# ============ Топливо: справочник карт, импорт, аналитика ============
+FUEL_CARD_REGISTRY = {
+    "7341000004152479": "толик",
+    "7341000004152487": "Бауржан",
+    "7341000004152495": "Карта 2495",
+    "7341000004162502": "Кайрат · 502AJ01",
+    "7341000004162510": "Даурен · 752AP01",
+    "7341000004162528": "Улан · 751AP01",
+    "7341000004162536": "Марат · 783BK01",
+    "7341000004162544": "Карта 881AU01",
+    "7341000004162551": "Сабыржан · 501AJ01",
+    "7341000004162569": "Нуралы · 990CH01",
+    "7341000004162577": "Букейхан · 972AH01",
+    "7341000004162585": "Бейбут · 954CH01",
+    "7341000004162593": "Даурен · 141ARG01",
+    "7341000004162601": "Мухтар · 191ARG01",
+    "7341000004162619": "Женис · 629BAT01",
+    "7341000004162627": "Дима · 980APK01",
+    "7341000004162635": "Карта 527ARK01",
+    "7341000004162643": "Абай · 560ATQ01",
+    "7341000004162650": "Сабыржан · 533BAT",
+    "7341000004162668": "Еркебулан · 545BAT01",
+    "7341000004162676": "Бекзат · 782BAT01",
+    "7341000004162684": "Секо · 903BAT01",
+    "7341000004162692": "Нургали · 912BAT01",
+}
+_CYR_PLATE = str.maketrans("АВЕКМНОРСТУХ", "ABEKMHOPCTYX")
+
+def _norm_plate(s):
+    return re.sub(r'[^A-Z0-9]', '', (s or '').upper().translate(_CYR_PLATE))
+
+def _plate_from_label(label):
+    for tok in (label or '').replace('·', ' ').split():
+        t = _norm_plate(tok)
+        if any(ch.isdigit() for ch in t) and len(t) >= 5:
+            return t
+    return ''
+
+def seed_fuel_cards():
+    vehicles = {_norm_plate(v.number): v.id for v in Vehicle.query.all()}
+    for card, label in FUEL_CARD_REGISTRY.items():
+        fc = FuelCard.query.filter_by(card=card).first()
+        vid = vehicles.get(_plate_from_label(label))
+        if fc is None:
+            db.session.add(FuelCard(card=card, label=label, vehicle_id=vid))
+        else:
+            if not fc.label:
+                fc.label = label
+            if vid and not fc.vehicle_id:
+                fc.vehicle_id = vid
+    db.session.commit()
+
+def import_fuel_xlsx(stream):
+    """Импорт выгрузки топливных транзакций. Идемпотентно по номеру транзакции."""
+    wb = load_workbook(stream, read_only=True, data_only=True)
+    ws = wb.worksheets[0]
+    it = ws.iter_rows(values_only=True)
+    next(it, None)  # заголовок
+    added = updated = 0
+    for r in it:
+        if not r or r[0] is None or len(r) < 15 or r[9] is None:
+            continue
+        txn = str(r[0])
+        rec = dict(date=r[1], card=(str(r[6]) if r[6] else ''),
+                   holder=(r[7] or ''), station=(r[3] or ''), address=(r[4] or ''),
+                   product=(r[8] or ''), liters=float(r[9] or 0), amount=float(r[14] or 0))
+        ex = FuelTransaction.query.filter_by(txn_id=txn).first()
+        if ex:
+            for k, v in rec.items():
+                setattr(ex, k, v)
+            updated += 1
+        else:
+            db.session.add(FuelTransaction(txn_id=txn, **rec))
+            added += 1
+    db.session.commit()
+    seed_fuel_cards()
+    for (card,) in db.session.query(FuelTransaction.card).distinct():
+        if card and not FuelCard.query.filter_by(card=card).first():
+            db.session.add(FuelCard(card=card, label=card))
+    db.session.commit()
+    return added, updated
+
+def _pearson(a, b):
+    k = len(a)
+    if k < 2:
+        return 0
+    ma, mb = sum(a) / k, sum(b) / k
+    num = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    da = sum((x - ma) ** 2 for x in a) ** .5
+    db_ = sum((y - mb) ** 2 for y in b) ** .5
+    return round(num / (da * db_), 3) if da and db_ else 0
+
+def _fuel_data(date_from, date_to):
+    from collections import defaultdict
+    conds = []
+    if date_from:
+        try:
+            conds.append(FuelTransaction.date >= datetime.strptime(date_from, '%Y-%m-%d'))
+        except ValueError:
+            date_from = None
+    if date_to:
+        try:
+            conds.append(FuelTransaction.date < datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        except ValueError:
+            date_to = None
+    txns = FuelTransaction.query.filter(*conds).all()
+    cards = {fc.card: fc for fc in FuelCard.query.all()}
+
+    tot_l = tot_a = 0.0
+    n = 0
+    dmin = dmax = None
+    byMonth = defaultdict(lambda: [0.0, 0.0])
+    byDriver = defaultdict(lambda: [0.0, 0.0, 0])
+    byStation = defaultdict(float)
+    byProduct = defaultdict(float)
+    vehLiters = defaultdict(float)
+    for t in txns:
+        tot_l += t.liters or 0
+        tot_a += t.amount or 0
+        n += 1
+        fc = cards.get(t.card)
+        label = fc.label if fc and fc.label else (t.card or '—')
+        d = byDriver[label]
+        d[0] += t.liters or 0
+        d[1] += t.amount or 0
+        d[2] += 1
+        byStation[(t.station or '—').replace('*', '').strip()] += t.liters or 0
+        byProduct[t.product or '—'] += t.liters or 0
+        if t.date:
+            mk = t.date.strftime('%Y-%m')
+            byMonth[mk][0] += t.liters or 0
+            byMonth[mk][1] += t.amount or 0
+            dmin = t.date if not dmin or t.date < dmin else dmin
+            dmax = t.date if not dmax or t.date > dmax else dmax
+        if fc and fc.vehicle_id:
+            vehLiters[fc.vehicle_id] += t.liters or 0
+
+    # рейсы за тот же период, что и топливо (иначе корреляция врёт: топливо
+    # покрывает более узкий диапазон дат, чем маршруты)
+    eff_from = date_from or (dmin.strftime('%Y-%m-%d') if dmin else None)
+    eff_to = date_to or (dmax.strftime('%Y-%m-%d') if dmax else None)
+    tconds = []
+    if eff_from:
+        tconds.append(Route.date >= datetime.strptime(eff_from, '%Y-%m-%d'))
+    if eff_to:
+        tconds.append(Route.date < datetime.strptime(eff_to, '%Y-%m-%d') + timedelta(days=1))
+    vehTrips = defaultdict(int)
+    tripMonth = defaultdict(int)
+    for vid, tc, mk in db.session.query(Route.vehicle_id, Route.trips_count,
+                                        func.strftime('%Y-%m', Route.date)).filter(*tconds):
+        if vid is None:
+            continue
+        vehTrips[vid] += tc or 0
+        tripMonth[mk] += tc or 0
+    vmap = {v.id: v for v in Vehicle.query.all()}
+    per_vehicle = []
+    for vid, liters in vehLiters.items():
+        v = vmap.get(vid)
+        trips = vehTrips.get(vid, 0)
+        per_vehicle.append({'vehicle': v.number if v else str(vid),
+                            'liters': round(liters), 'trips': trips,
+                            'lpt': round(liters / trips, 1) if trips else None})
+    per_vehicle.sort(key=lambda x: -(x['lpt'] or -1))
+    months = sorted(byMonth)  # месяцы, где есть топливо
+    fl = [byMonth.get(m, [0, 0])[0] for m in months]
+    tp = [tripMonth.get(m, 0) for m in months]
+
+    top = lambda dd, lim=12: sorted([{'name': k, 'liters': round(v)} for k, v in dd.items()],
+                                    key=lambda x: -x['liters'])[:lim]
+    return {
+        'has_data': n > 0,
+        'date_from': date_from or '', 'date_to': date_to or '',
+        'period': [dmin.strftime('%Y-%m-%d') if dmin else '', dmax.strftime('%Y-%m-%d') if dmax else ''],
+        'totals': {'liters': round(tot_l), 'amount': round(tot_a), 'tx': n,
+                   'price': round(tot_a / tot_l, 1) if tot_l else 0, 'drivers': len(byDriver)},
+        'by_month': [{'m': m, 'liters': round(byMonth[m][0]), 'amount': round(byMonth[m][1])} for m in sorted(byMonth)],
+        'by_driver': sorted([{'name': k, 'liters': round(v[0]), 'amount': round(v[1]), 'tx': v[2]}
+                             for k, v in byDriver.items()], key=lambda x: -x['liters'])[:15],
+        'by_station': top(byStation, 10),
+        'by_product': top(byProduct, 8),
+        'per_vehicle': per_vehicle,
+        'corr_r': _pearson(fl, tp),
+        'corr_months': months, 'corr_fuel': [round(x) for x in fl], 'corr_trips': tp,
+    }
+
+@app.route('/fuel')
+@login_required
+def fuel():
+    data = _fuel_data(request.args.get('date_from'), request.args.get('date_to'))
+    return render_template('fuel.html', **data)
+
+@app.route('/fuel/import', methods=['POST'])
+@login_required
+def fuel_import():
+    f = request.files.get('file')
+    if not f or not f.filename:
+        flash('Выберите файл выгрузки (.xlsx)', 'danger')
+        return redirect(url_for('fuel'))
+    if not f.filename.lower().endswith('.xlsx'):
+        flash('Нужен файл в формате .xlsx', 'danger')
+        return redirect(url_for('fuel'))
+    try:
+        added, updated = import_fuel_xlsx(f.stream)
+        flash(f'Загрузка готова: добавлено {added}, обновлено {updated} транзакций', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Ошибка загрузки файла: {e}', 'danger')
+    return redirect(url_for('fuel'))
+
+@app.route('/fuel/export.xlsx')
+@login_required
+def fuel_export():
+    data = _fuel_data(request.args.get('date_from'), request.args.get('date_to'))
+    output = BytesIO()
+    wb = Workbook()
+    hf = Font(bold=True)
+
+    def hdr(ws):
+        for c in ws[1]:
+            c.font = hf
+            c.alignment = Alignment(horizontal='center')
+
+    def autos(ws):
+        for col in ws.columns:
+            ln = max((len(str(c.value)) if c.value is not None else 0) for c in col)
+            ws.column_dimensions[col[0].column_letter].width = min(max(ln + 2, 10), 40)
+
+    t = data['totals']
+    ws = wb.active
+    ws.title = 'Итоги'
+    ws.append(['Показатель', 'Значение'])
+    hdr(ws)
+    for row in [('Период', ' — '.join(data['period'])), ('Литров', t['liters']),
+                ('Сумма, ₸', t['amount']), ('Средняя цена, ₸/л', t['price']),
+                ('Заправок', t['tx']), ('Карт', t['drivers'])]:
+        ws.append(list(row))
+    autos(ws)
+    ws = wb.create_sheet('По водителям')
+    ws.append(['Водитель / карта', 'Литры', 'Сумма ₸', 'Заправок'])
+    hdr(ws)
+    for d in data['by_driver']:
+        ws.append([d['name'], d['liters'], d['amount'], d['tx']])
+    autos(ws)
+    ws = wb.create_sheet('Помесячно')
+    ws.append(['Месяц', 'Литры', 'Сумма ₸'])
+    hdr(ws)
+    for m in data['by_month']:
+        ws.append([m['m'], m['liters'], m['amount']])
+    autos(ws)
+    ws = wb.create_sheet('По АЗС')
+    ws.append(['АЗС', 'Литры'])
+    hdr(ws)
+    for s in data['by_station']:
+        ws.append([s['name'], s['liters']])
+    autos(ws)
+    wb.save(output)
+    output.seek(0)
+    fn = f"fuel_{data['date_from'] or 'all'}_{data['date_to'] or 'all'}.xlsx"
+    return send_file(output, as_attachment=True, download_name=fn,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/summary')
 @login_required
