@@ -33,11 +33,17 @@
                 </div>
                 <div class="col-md-3 col-6">
                     <label class="form-label">Откуда</label>
-                    <input type="text" class="form-control" name="start_point" value="{{ filters.start_point }}" placeholder="точка отправления">
+                    <input type="text" class="form-control" name="start_point" value="{{ filters.start_point }}" placeholder="точка отправления" list="startPoints" autocomplete="off">
+                    <datalist id="startPoints">
+                        {% for p in start_points %}<option value="{{ p }}">{% endfor %}
+                    </datalist>
                 </div>
                 <div class="col-md-3 col-6">
                     <label class="form-label">Куда</label>
-                    <input type="text" class="form-control" name="end_point" value="{{ filters.end_point }}" placeholder="точка назначения">
+                    <input type="text" class="form-control" name="end_point" value="{{ filters.end_point }}" placeholder="точка назначения" list="endPoints" autocomplete="off">
+                    <datalist id="endPoints">
+                        {% for p in end_points %}<option value="{{ p }}">{% endfor %}
+                    </datalist>
                 </div>
                 <div class="col-md-3 col-6">
                     <label class="form-label">Аккаунт</label>
@@ -122,88 +128,6 @@
             <div class="card text-center h-100"><div class="card-body">
                 <div class="h3 mb-0 text-danger">{{ totals.unpaid }}</div><div class="text-muted small">Не оплачены</div>
             </div></div>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- По аккаунтам -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="fas fa-users"></i> По аккаунтам</div>
-                <div class="table-responsive">
-                    <table class="table table-striped mb-0">
-                        <thead><tr><th>Аккаунт</th><th class="text-end">Маршрутов</th><th class="text-end">Рейсов</th><th class="text-end">Вес, т</th><th class="text-end">Топливо, л</th></tr></thead>
-                        <tbody>
-                        {% for a in per_account %}
-                            <tr>
-                                <td><i class="fas fa-user text-muted"></i> {{ a.username }}</td>
-                                <td class="text-end">{{ a.routes }}</td>
-                                <td class="text-end">{{ a.trips }}</td>
-                                <td class="text-end">{{ '%.1f'|format(a.weight) }}</td>
-                                <td class="text-end">{{ '%.0f'|format(a.fuel) }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Помесячно -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="fas fa-calendar-alt"></i> Помесячно</div>
-                <div class="table-responsive" style="max-height: 360px;">
-                    <table class="table table-striped mb-0">
-                        <thead><tr><th>Месяц</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
-                        <tbody>
-                        {% for m in by_month %}
-                            <tr><td>{{ m.month }}</td><td class="text-end">{{ m.routes }}</td><td class="text-end">{{ '%.1f'|format(m.weight) }}</td></tr>
-                        {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- По типам груза -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="fas fa-boxes"></i> По типам груза</div>
-                <div class="table-responsive" style="max-height: 360px;">
-                    <table class="table table-striped mb-0">
-                        <thead><tr><th>Тип груза</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
-                        <tbody>
-                        {% for c in by_cargo %}
-                            <tr><td>{{ c.name }}</td><td class="text-end">{{ c.routes }}</td><td class="text-end">{{ '%.1f'|format(c.weight) }}</td></tr>
-                        {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- По машинам -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="fas fa-truck"></i> По машинам (топ-15)</div>
-                <div class="table-responsive" style="max-height: 360px;">
-                    <table class="table table-striped mb-0">
-                        <thead><tr><th>Машина</th><th class="text-end">Маршрутов</th><th class="text-end">Вес, т</th></tr></thead>
-                        <tbody>
-                        {% for v in by_vehicle %}
-                            <tr><td>{{ v.number }} — {{ v.model }}</td><td class="text-end">{{ v.routes }}</td><td class="text-end">{{ '%.1f'|format(v.weight) }}</td></tr>
-                        {% else %}
-                            <tr><td colspan="3" class="text-center text-muted">Нет данных</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
     </div>
 

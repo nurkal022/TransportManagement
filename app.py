@@ -625,6 +625,10 @@ def summary():
         'opt_vehicles': Vehicle.query.order_by(Vehicle.number).all(),
         'opt_cargo': CargoType.query.order_by(CargoType.name).all(),
         'opt_accounts': User.query.order_by(User.username).all(),
+        'start_points': [p[0] for p in db.session.query(Route.start_point)
+                         .distinct().order_by(Route.start_point).all() if p[0]],
+        'end_points': [p[0] for p in db.session.query(Route.end_point)
+                       .distinct().order_by(Route.end_point).all() if p[0]],
     }
     return render_template('summary.html', filters=filters, routes_page=routes_page,
                            **options, **data)
