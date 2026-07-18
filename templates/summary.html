@@ -10,30 +10,82 @@
             <p class="text-muted mb-0">Аналитика по всем аккаунтам для отчётности (только просмотр).</p>
         </div>
         <div class="col-md-4 text-md-end">
-            <a class="btn btn-success" href="{{ url_for('summary_export', date_from=date_from, date_to=date_to) }}">
+            <a class="btn btn-success" href="{{ url_for('summary_export') }}?{{ request.query_string.decode() }}">
                 <i class="fas fa-file-excel"></i> Скачать Excel
             </a>
         </div>
     </div>
 
-    <!-- Фильтр периода -->
+    <!-- Фильтры -->
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="fas fa-filter"></i> Период</h5>
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Фильтры отчёта</h5>
         </div>
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="date_from" class="form-label">С даты</label>
-                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ date_from }}">
+                <div class="col-md-3 col-6">
+                    <label class="form-label">С даты</label>
+                    <input type="date" class="form-control" name="date_from" value="{{ filters.date_from }}">
                 </div>
-                <div class="col-md-4">
-                    <label for="date_to" class="form-label">По дату</label>
-                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ date_to }}">
+                <div class="col-md-3 col-6">
+                    <label class="form-label">По дату</label>
+                    <input type="date" class="form-control" name="date_to" value="{{ filters.date_to }}">
                 </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Показать</button>
-                    <a href="{{ url_for('summary') }}" class="btn btn-outline-secondary">Сбросить</a>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Откуда</label>
+                    <input type="text" class="form-control" name="start_point" value="{{ filters.start_point }}" placeholder="точка отправления">
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Куда</label>
+                    <input type="text" class="form-control" name="end_point" value="{{ filters.end_point }}" placeholder="точка назначения">
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Аккаунт</label>
+                    <select class="form-select" name="user_id">
+                        <option value="">Все аккаунты</option>
+                        {% for u in opt_accounts %}
+                        <option value="{{ u.id }}" {% if filters.user_id|string == u.id|string %}selected{% endif %}>{{ u.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Водитель</label>
+                    <select class="form-select" name="driver_id">
+                        <option value="">Все водители</option>
+                        {% for d in opt_drivers %}
+                        <option value="{{ d.id }}" {% if filters.driver_id|string == d.id|string %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Машина</label>
+                    <select class="form-select" name="vehicle_id">
+                        <option value="">Весь транспорт</option>
+                        {% for v in opt_vehicles %}
+                        <option value="{{ v.id }}" {% if filters.vehicle_id|string == v.id|string %}selected{% endif %}>{{ v.number }} — {{ v.model }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Тип груза</label>
+                    <select class="form-select" name="cargo_type_id">
+                        <option value="">Все типы</option>
+                        {% for c in opt_cargo %}
+                        <option value="{{ c.id }}" {% if filters.cargo_type_id|string == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 col-6">
+                    <label class="form-label">Оплата</label>
+                    <select class="form-select" name="invoice_paid">
+                        <option value="">Любая</option>
+                        <option value="1" {% if filters.invoice_paid == '1' %}selected{% endif %}>Оплачено</option>
+                        <option value="0" {% if filters.invoice_paid == '0' %}selected{% endif %}>Не оплачено</option>
+                    </select>
+                </div>
+                <div class="col-md-9 d-flex gap-2 align-items-end">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Применить</button>
+                    <a href="{{ url_for('summary') }}" class="btn btn-outline-secondary"><i class="fas fa-undo"></i> Сбросить</a>
                 </div>
             </form>
         </div>
@@ -153,6 +205,51 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Список конкретных маршрутов -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-list"></i> Маршруты по фильтру</span>
+            <span class="text-muted small">Найдено: {{ routes_page.total }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr>
+                    <th>Дата</th><th>Откуда → Куда</th><th>Водитель</th><th>Машина</th><th>Груз</th>
+                    <th class="text-end">Рейсов</th><th class="text-end">Вес, т</th><th>Оплата</th><th>Аккаунт</th>
+                </tr></thead>
+                <tbody>
+                {% for r in routes_page.items %}
+                    <tr>
+                        <td class="mono">{{ r.date.strftime('%d.%m.%Y') if r.date else '' }}</td>
+                        <td>{{ r.start_point }} → {{ r.end_point }}</td>
+                        <td>{{ r.driver.name if r.driver else '—' }}</td>
+                        <td class="mono">{{ r.vehicle.number if r.vehicle else '—' }}</td>
+                        <td>{{ r.cargo_type.name if r.cargo_type else '—' }}</td>
+                        <td class="text-end num">{{ r.trips_count }}</td>
+                        <td class="text-end num">{{ '%.1f'|format(r.cargo_weight or 0) }}</td>
+                        <td>{% if r.invoice_paid %}<span class="badge bg-success">Оплачено</span>{% else %}<span class="badge bg-danger">Нет</span>{% endif %}</td>
+                        <td class="mono">{{ r.owner.username if r.owner else '' }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="9" class="text-center text-muted py-4">Ничего не найдено по заданным фильтрам</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if routes_page.pages > 1 %}
+        <div class="card-body">
+            {% set qs = request.args.to_dict() %}{% set _ = qs.pop('page', None) %}
+            <nav><ul class="pagination justify-content-center mb-0">
+                <li class="page-item {% if not routes_page.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('summary', page=routes_page.prev_num, **qs) }}">← Назад</a></li>
+                <li class="page-item disabled"><span class="page-link">Стр. {{ routes_page.page }} из {{ routes_page.pages }}</span></li>
+                <li class="page-item {% if not routes_page.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('summary', page=routes_page.next_num, **qs) }}">Вперёд →</a></li>
+            </ul></nav>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

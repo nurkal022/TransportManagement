@@ -97,6 +97,7 @@ class Route(db.Model):
     notes = db.Column(db.Text)      # Дополнительные заметки
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    owner = db.relationship('User')
 
     def to_dict(self):
         return {
@@ -240,24 +241,45 @@ def switch_account(user_id):
     return redirect(request.referrer or url_for('index'))
 
 # --- Сводка «Все данные» (по всем пользователям, только чтение, admin) ---
-def _summary_data(date_from, date_to):
-    """Собирает агрегированную сводку по маршрутам всех пользователей.
-
-    date_from/date_to — строки 'YYYY-MM-DD' или None. Возвращает dict с
-    итогами и разбивками. Данные только читаются.
-    """
+def _route_filters(args):
+    """По параметрам запроса собирает условия SQLAlchemy и словарь значений фильтра."""
     conditions = []
-    if date_from:
+    f = {}
+    df = (args.get('date_from') or '').strip()
+    dt = (args.get('date_to') or '').strip()
+    if df:
         try:
-            conditions.append(Route.date >= datetime.strptime(date_from, '%Y-%m-%d'))
+            conditions.append(Route.date >= datetime.strptime(df, '%Y-%m-%d'))
         except ValueError:
-            date_from = None
-    if date_to:
+            df = ''
+    if dt:
         try:
-            conditions.append(Route.date < datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+            conditions.append(Route.date < datetime.strptime(dt, '%Y-%m-%d') + timedelta(days=1))
         except ValueError:
-            date_to = None
+            dt = ''
+    f['date_from'], f['date_to'] = df, dt
+    for key, col in (('start_point', Route.start_point), ('end_point', Route.end_point)):
+        v = (args.get(key) or '').strip()
+        f[key] = v
+        if v:
+            conditions.append(col.ilike(f'%{v}%'))
+    for key, col in (('driver_id', Route.driver_id), ('vehicle_id', Route.vehicle_id),
+                     ('cargo_type_id', Route.cargo_type_id), ('user_id', Route.user_id)):
+        v = (args.get(key) or '').strip()
+        f[key] = v
+        if v.isdigit():
+            conditions.append(col == int(v))
+    paid = (args.get('invoice_paid') or '').strip()
+    f['invoice_paid'] = paid
+    if paid in ('1', '0'):
+        conditions.append(Route.invoice_paid == (paid == '1'))
+    return conditions, f
 
+def _summary_data(conditions):
+    """Агрегированная сводка по маршрутам (только чтение).
+
+    conditions — список выражений-условий SQLAlchemy для Route.
+    """
     base = Route.query.filter(*conditions)
     total_routes = base.count()
 
@@ -315,8 +337,6 @@ def _summary_data(date_from, date_to):
     by_month = [{'month': r[0], 'routes': r[1], 'weight': r[2]} for r in month_rows]
 
     return {
-        'date_from': date_from or '',
-        'date_to': date_to or '',
         'totals': {
             'routes': total_routes, 'trips': trips, 'weight': weight,
             'fuel': fuel, 'volume': volume, 'paid': paid, 'unpaid': unpaid,
@@ -591,13 +611,27 @@ def fuel_export():
 @app.route('/summary')
 @login_required
 def summary():
-    data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
-    return render_template('summary.html', **data)
+    conditions, filters = _route_filters(request.args)
+    data = _summary_data(conditions)
+    page = request.args.get('page', 1, type=int)
+    routes_page = Route.query.filter(*conditions).order_by(Route.date.desc()) \
+        .paginate(page=page, per_page=50, error_out=False)
+    options = {
+        'opt_drivers': Driver.query.order_by(Driver.name).all(),
+        'opt_vehicles': Vehicle.query.order_by(Vehicle.number).all(),
+        'opt_cargo': CargoType.query.order_by(CargoType.name).all(),
+        'opt_accounts': User.query.order_by(User.username).all(),
+    }
+    return render_template('summary.html', filters=filters, routes_page=routes_page,
+                           **options, **data)
 
 @app.route('/summary/export.xlsx')
 @login_required
 def summary_export():
-    data = _summary_data(request.args.get('date_from'), request.args.get('date_to'))
+    conditions, filters = _route_filters(request.args)
+    data = _summary_data(conditions)
+    data['date_from'] = filters['date_from']
+    data['date_to'] = filters['date_to']
 
     output = BytesIO()
     wb = Workbook()
